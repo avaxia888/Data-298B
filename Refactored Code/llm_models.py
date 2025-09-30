@@ -2,6 +2,7 @@ import os
 import json
 import re
 import boto3
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
@@ -23,6 +24,8 @@ class LLMService:
     # We will be adding more models here
     MODEL_REGISTRY = {
         "Claude 3 Haiku": "anthropic.claude-3-haiku-20240307-v1:0",
+        # Mistral 7B instruct model
+        "Mistral 7B": "mistral.mistral-7b-instruct-v0:2",
     }
 
     def __init__(self):
@@ -44,13 +47,10 @@ class LLMService:
         )
 
         self.model_registry = dict(self.MODEL_REGISTRY)
-        
-        # default model id used when callers don't specify one
-        self.default_model_id = (
-            self.model_registry.get("claude_haiku")
-            if "claude_haiku" in self.model_registry
-            else next(iter(self.model_registry.values()))
-        )
+
+        # default model id used when callers don't specify one: pick the
+        # first registered model value (safe fallback when keys don't match)
+        self.default_model_id = next(iter(self.model_registry.values())) if self.model_registry else None
 
     def generate_answer(self, prompt, temp=0.7, max_tokens=800, model_id: str | None = None):
         """Generate a model completion.
@@ -66,21 +66,78 @@ class LLMService:
         """
         model_id = model_id or self.default_model_id
         model_id = self._get_model(model_id)
-        payload = {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": max_tokens,
-            "temperature": temp,
-            "top_p": 0.9,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
-        }
+
+        mid = model_id.lower() if isinstance(model_id, str) else ""
+        if "anthropic" in mid:
+            payload = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens,
+                "temperature": temp,
+                "top_p": 0.9,
+                "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+            }
+        elif "mistral" in mid or mid.startswith("mistral."):
+            formatted_prompt = f"<s>[INST] {prompt} [/INST]"
+            payload = {
+                "prompt": formatted_prompt,
+                "max_tokens": max_tokens,
+                "temperature": temp,
+            }
+        else:
+            payload = {"input": prompt, "temperature": temp, "max_tokens": max_tokens}
+
+        # Build a single payload per detected model family and invoke once.
         res = self.bedrock.invoke_model(
             modelId=model_id,
             contentType="application/json",
             accept="application/json",
             body=json.dumps(payload),
         )
+
         body = json.loads(res["body"].read())
-        text = body["content"][0]["text"].strip()
+
+        # Response parsing: prefer Mistral native shape (outputs[0]['text']),
+        # then try other common shapes (Anthropic, choices, generated_text).
+        text = None
+
+        # 1) Mistral/Bedrock native: outputs[0]['text']
+        if isinstance(body, dict) and "outputs" in body and isinstance(body["outputs"], list):
+            out0 = body["outputs"][0]
+            if isinstance(out0, dict) and "text" in out0:
+                text = out0["text"].strip()
+
+        # 2) Anthropic-style
+        if not text and isinstance(body, dict) and "content" in body:
+            content = body.get("content")
+            if isinstance(content, list) and len(content) and isinstance(content[0], dict):
+                text_field = content[0].get("text")
+                if isinstance(text_field, str):
+                    text = text_field.strip()
+
+        # 3) other common shapes
+        if not text and isinstance(body, dict):
+            if "generated_text" in body and isinstance(body["generated_text"], str):
+                text = body["generated_text"].strip()
+            elif "output" in body:
+                out = body["output"]
+                if isinstance(out, list):
+                    text = "\n".join([str(x) for x in out])
+                else:
+                    text = str(out).strip()
+            elif "choices" in body and isinstance(body["choices"], list):
+                first_choice = body["choices"][0]
+                if isinstance(first_choice, dict) and "text" in first_choice:
+                    text = str(first_choice["text"]).strip()
+                elif isinstance(first_choice, dict) and "message" in first_choice and isinstance(first_choice["message"], dict):
+                    candidate = first_choice["message"].get("content")
+                    if isinstance(candidate, str):
+                        text = candidate.strip()
+
+        # Final fallback: stringify body
+        if not text:
+            text = str(body)
+
+        # remove emphasis markup and return
         return re.sub(r"\*.*?\*", "", text)
 
     # --- Registry helpers ---
@@ -95,4 +152,21 @@ class LLMService:
         """
         if not key_or_id:
             return self.default_model_id
-        return self.model_registry.get(key_or_id, self.default_model_id)
+
+        # If the caller passed a full model id that already matches one of
+        # the registered values, return it directly.
+        if key_or_id in self.model_registry.values():
+            return key_or_id
+
+        # Case-insensitive match against friendly keys (allow underscores or spaces)
+        key_lower = key_or_id.lower()
+        for friendly, full_id in self.model_registry.items():
+            if friendly.lower() == key_lower or friendly.replace(" ", "_").lower() == key_lower:
+                return full_id
+
+        # If it looks like a full model identifier (heuristic: contains a dot and a colon)
+        if ('.' in key_or_id and ':' in key_or_id) or '/' in key_or_id:
+            return key_or_id
+
+        # Fallback to the default model id
+        return self.default_model_id
