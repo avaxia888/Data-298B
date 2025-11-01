@@ -49,6 +49,81 @@ class LLMClient:
         messages: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
     ) -> str:
+        """Generate text using the configured endpoint.
+
+        Supports two modes:
+        - openai: OpenAI-compatible Chat Completions API
+        - huggingface: Hugging Face Inference API (string inputs)
+        """
+        mode = (endpoint.mode or "openai").lower()
+        if mode == "huggingface":
+            return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+        # Default to OpenAI-compatible
+        return self._generate_openai(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+
+    # --- Internal helpers ---
+    def _generate_huggingface(
+        self,
+        endpoint: EndpointConfig,
+        prompt: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        *,
+        messages: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        # Prefer standard env var, but allow HF_TOKEN as a fallback
+        api_key = os.getenv("HUGGINGFACE_API_TOKEN") or os.getenv("HF_TOKEN")
+        if not api_key:
+            raise RuntimeError("Missing API key: set HUGGINGFACE_API_TOKEN (or HF_TOKEN).")
+
+        inputs = prompt or system_prompt or ""
+        hf_payload: Dict[str, Any] = {"inputs": inputs, "parameters": {}}
+
+        if parameters:
+            p: Dict[str, Any] = {}
+            if "temperature" in parameters:
+                p["temperature"] = parameters["temperature"]
+            if "max_new_tokens" in parameters:
+                p["max_new_tokens"] = parameters["max_new_tokens"]
+            if "top_p" in parameters:
+                p["top_p"] = parameters["top_p"]
+            if "stop" in parameters:
+                p["stop_sequences"] = parameters["stop"]
+            hf_payload["parameters"] = p
+
+        with httpx.Client(timeout=self.timeout) as client:
+            try:
+                resp = client.post(
+                    endpoint.url,
+                    headers={
+                        "Accept": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=hf_payload,
+                )
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                detail = e.response.text if e.response is not None else str(e)
+                code = e.response.status_code if e.response is not None else "unknown"
+                raise RuntimeError(f"Hugging Face error ({code}): {detail}") from e
+            data = resp.json()
+
+        if isinstance(data, list) and data and isinstance(data[0], dict) and "generated_text" in data[0]:
+            return str(data[0]["generated_text"]).strip()
+        if isinstance(data, dict) and "generated_text" in data:
+            return str(data["generated_text"]).strip()
+        return json.dumps(data)
+
+    def _generate_openai(
+        self,
+        endpoint: EndpointConfig,
+        prompt: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        *,
+        messages: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> str:
         is_url = endpoint.url.startswith("https://")
         model_id = endpoint.model if is_url else endpoint.url
         base_url = endpoint.url if is_url else endpoint.base_url
