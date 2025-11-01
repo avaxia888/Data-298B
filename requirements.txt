@@ -1,7 +1,3 @@
-boto3==1.38.11
-pinecone==6.0.2
-sentence_transformers==4.1.0
-python-dotenv==1.0.0
-streamlit
-scikit-learn
-numpy
+streamlit==1.39.0
+httpx==0.27.2
+python-dotenv==1.0.1

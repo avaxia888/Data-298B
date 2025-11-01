@@ -1,0 +1,21 @@
+[
+  {
+    "key": "llama-3-8b-neil",
+    "name": "Llama-3 8B Finetuned LoRA",
+    "url": "https://xogyk7jg4qwqza66.us-east-1.aws.endpoints.huggingface.cloud/",
+    "mode": "openai"
+  },
+  {
+    "key": "mistral-7b-neil",
+    "name": "Mistral Finetuned LoRA",
+    "url": "https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/v1/",
+    "mode": "openai",
+    "model": "tdvoroch/tyson-Mistral-LoRA-merged"
+  },
+  {
+    "key": "tyson-ft-gpt-4o-mini",
+    "name": "GPT-4o-mini Finetuned LoRA",
+    "url": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
+    "mode": "openai"
+  }
+]
