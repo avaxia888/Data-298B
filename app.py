@@ -60,29 +60,38 @@ def render_finetuned_chat(models: List[EndpointConfig]):
         prompt = build_prompt(system_prompt, messages)
         chat_messages = build_chat_messages(messages)
 
-        system_for_api = None
-        if chat_messages and chat_messages[-1]["role"] == "user":
-            chat_messages[-1]["content"] = f"{system_prompt}\n\n{chat_messages[-1]['content']}"
+        # Prepend system prompt to every user message for OpenAI-mode endpoints;
+        # for Hugging Face (Llama) we pass system separately to avoid template conflicts.
+        if getattr(selected, "mode", "openai") == "openai" and system_prompt:
+            for m in chat_messages:
+                if m.get("role") == "user":
+                    content = m.get("content", "")
+                    if not content.lstrip().startswith(system_prompt[:16]):
+                        m["content"] = f"{system_prompt}\n\n{content}"
+            system_for_api = None
+        else:
+            system_for_api = system_prompt
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking…"):
-                client = LLMClient()
-                try:
-                    text = client.generate(
-                        endpoint=selected,
-                        prompt=prompt,
-                        parameters={
-                            "temperature": float(temperature),
-                            "max_new_tokens": int(max_new_tokens),
-                        },
-                        messages=chat_messages,
-                        system_prompt=system_for_api,
-                    )
-                except Exception as e:
-                    st.error(f"Generation failed: {e}")
-                    return
-                st.markdown(text)
-        messages.append({"role": "assistant", "content": text})
+        with st.spinner("Thinking…"):
+            client = LLMClient()
+            try:
+                text = client.generate(
+                    endpoint=selected,
+                    prompt=prompt,
+                    parameters={
+                        "temperature": float(temperature),
+                        "max_new_tokens": int(max_new_tokens),
+                    },
+                    messages=chat_messages,
+                    system_prompt=system_for_api,
+                )
+            except Exception as e:
+                st.error(f"Generation failed: {e}")
+                return
+        # Append assistant message once (avoid accidental duplicates across reruns)
+        if not (messages and messages[-1].get("role") == "assistant" and messages[-1].get("content") == text):
+            messages.append({"role": "assistant", "content": text})
+        st.rerun()
 
 
 def main():

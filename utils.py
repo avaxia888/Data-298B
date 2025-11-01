@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
@@ -38,3 +38,25 @@ def build_chat_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
         role = "user" if m.get("role") == "user" else "assistant"
         chat.append({"role": role, "content": m.get("content", "")})
     return chat
+
+
+def llama3_chat_template(system_prompt: Optional[str], messages: Optional[List[Dict[str, str]]]) -> Optional[str]:
+    if not messages:
+        return None
+
+    bos = "<|begin_of_text|>"
+
+    def wrap(role: str, content: str) -> str:
+        return f"<|start_header_id|>{role}<|end_header_id|>\n{content}<|eot_id|>"
+
+    parts: List[str] = [bos]
+    if system_prompt:
+        parts.append(wrap("system", system_prompt))
+    for m in messages:
+        role = m.get("role", "user")
+        content = m.get("content", "")
+        if role not in ("user", "assistant"):
+            role = "user"
+        parts.append(wrap(role, content))
+    parts.append("<|start_header_id|>assistant<|end_header_id|>\n")
+    return "".join(parts)
