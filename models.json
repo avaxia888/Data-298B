@@ -2,7 +2,7 @@
   {
     "key": "llama-3-8b-neil",
     "name": "Llama-3 8B Finetuned LoRA",
-    "url": "https://yvh04azznkrjr12y.us-east-1.aws.endpoints.huggingface.cloud",
+    "url": "https://sw7vbx9erzaac8mo.us-east-1.aws.endpoints.huggingface.cloud",
     "mode": "huggingface"
   },
   {
