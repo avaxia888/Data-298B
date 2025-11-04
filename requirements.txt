@@ -1,3 +1,19 @@
+# Core Application Dependencies
 streamlit==1.39.0
 httpx==0.27.2
 python-dotenv==1.0.1
+pyarrow==22.0.0  # Required by streamlit (version conflict but works)
+
+# AWS Bedrock (for RAG)
+boto3==1.38.11
+
+# Pinecone Vector Database (for RAG)
+pinecone-client==5.0.1
+
+# Embeddings and NLP (for RAG)
+sentence-transformers==3.0.0  # Updated for compatibility
+scikit-learn==1.3.0
+numpy==1.24.3
+
+# Optional: for development
+# watchdog  # For better Streamlit performance

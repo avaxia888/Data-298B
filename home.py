@@ -25,7 +25,7 @@ def render_home():
             "key": "rag",
             "title": "RAG + Prompt Engineering",
             "desc": "Retrieve relevant context from your documents, then generate an answer grounded in those sources.",
-            "disabled": True,
+            "disabled": False,
         },
         {
             "key": "finetuned",
@@ -36,7 +36,7 @@ def render_home():
         {
             "key": "rag_plus",
             "title": "RAG + Finetuned",
-            "desc": "Combine retrieval with your fine‑tuned model for grounded answers with your model’s voice and task skills. Coming soon.",
+            "desc": "Combine retrieval with your fine‑tuned model for grounded answers with your model's voice and task skills. Coming soon.",
             "disabled": True,
         },
     ]
@@ -64,6 +64,9 @@ def render_home():
                 if clicked:
                     if card["key"] == "finetuned":
                         set_view("finetuned")
+                        return
+                    elif card["key"] == "rag":
+                        set_view("rag")
                         return
                     # For disabled cards we won't navigate, but guard anyway
                     st.toast("Coming soon", icon="⏳")

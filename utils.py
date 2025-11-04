@@ -21,6 +21,12 @@ def render_messages(messages: List[Dict[str, str]]) -> None:
     for msg in messages:
         with st.chat_message(msg.get("role", "assistant")):
             st.markdown(msg.get("content", ""))
+            # Display metrics if they exist (for RAG messages)
+            if "metrics" in msg and msg.get("role") == "assistant":
+                with st.expander("📊 Retrieval Metrics", expanded=False):
+                    metrics = msg["metrics"]
+                    st.write(f"**Average Similarity:** {metrics.get('avg', 0):.3f}")
+                    st.write(f"**Top Similarity:** {metrics.get('top', 0):.3f}")
 
 
 def build_prompt(system_prompt: str, messages: List[Dict[str, str]]) -> str:
