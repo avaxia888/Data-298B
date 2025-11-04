@@ -17,5 +17,12 @@
     "name": "GPT-4o-mini Finetuned LoRA",
     "url": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
     "mode": "openai"
+  },
+  {
+    "key": "gpt-5-judge",
+    "name": "GPT-5 Evaluation Judge",
+    "url": "gpt-5",
+    "mode": "openai",
+    "purpose": "evaluation"
   }
 ]

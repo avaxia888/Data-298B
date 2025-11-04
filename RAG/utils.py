@@ -102,7 +102,9 @@ def rag_pipeline(
     temp: float,
     model_id: str | None = None,
     system_prompt: str = None,
-) -> Tuple[str, Dict[str, float]]:
+    evaluate_with_judge: bool = False,
+    judge: Any = None,
+) -> Tuple[str, Dict[str, Any]]:
     """Run a full retrieval-augmented generation (RAG) pipeline.
 
     Steps: embed -> retrieve -> prompt -> generate -> evaluate.
@@ -114,13 +116,32 @@ def rag_pipeline(
         temp: sampling temperature.
         model_id: optional model key or full ID.
         system_prompt: optional system prompt to use.
+        evaluate_with_judge: whether to use LLM judge for evaluation.
+        judge: LLMJudge instance for evaluation.
 
     Returns:
-        Tuple[str, Dict[str, float]]: generated answer and retrieval metrics.
+        Tuple[str, Dict[str, Any]]: generated answer and evaluation metrics.
     """
     qv = embed_query(service.embed_model, query)
     chunks = retrieve_context(service.index, qv)
     prompt = build_prompt(query, chunks, history, system_prompt)
     ans = service.generate_answer(prompt, temp=temp, model_id=model_id)
+    
+    # Basic retrieval metrics
     metrics = evaluate_retrieval(service.embed_model, query, chunks)
+    
+    # Add LLM judge evaluation if requested
+    if evaluate_with_judge and judge:
+        try:
+            eval_result = judge.evaluate_response(query, ans, chunks)
+            metrics["judge_evaluation"] = {
+                "scores": eval_result.scores,
+                "overall_score": eval_result.overall_score,
+                "strengths": eval_result.strengths,
+                "weaknesses": eval_result.weaknesses,
+                "suggestions": eval_result.suggestions
+            }
+        except Exception as e:
+            metrics["judge_evaluation"] = {"error": str(e)}
+    
     return ans, metrics

@@ -21,12 +21,57 @@ def render_messages(messages: List[Dict[str, str]]) -> None:
     for msg in messages:
         with st.chat_message(msg.get("role", "assistant")):
             st.markdown(msg.get("content", ""))
-            # Display metrics if they exist (for RAG messages)
-            if "metrics" in msg and msg.get("role") == "assistant":
-                with st.expander("📊 Retrieval Metrics", expanded=False):
+            
+            # Check if this is an assistant message
+            if msg.get("role") == "assistant":
+                # Display retrieval metrics if they exist (for RAG messages)
+                if "metrics" in msg:
                     metrics = msg["metrics"]
-                    st.write(f"**Average Similarity:** {metrics.get('avg', 0):.3f}")
-                    st.write(f"**Top Similarity:** {metrics.get('top', 0):.3f}")
+                    
+                    # Display retrieval metrics
+                    with st.expander("📊 Retrieval Metrics", expanded=False):
+                        st.write(f"**Average Similarity:** {metrics.get('avg', 0):.3f}")
+                        st.write(f"**Top Similarity:** {metrics.get('top', 0):.3f}")
+                    
+                    # Display judge evaluation if available in metrics
+                    if "judge_evaluation" in metrics:
+                        eval_data = metrics["judge_evaluation"]
+                        if "error" not in eval_data:
+                            _render_evaluation(eval_data)
+                
+                # Display evaluation if it exists (for finetuned models)
+                elif "evaluation" in msg:
+                    eval_data = msg["evaluation"]
+                    if "error" not in eval_data:
+                        _render_evaluation(eval_data)
+
+def _render_evaluation(eval_data: Dict[str, Any]) -> None:
+    """Render the evaluation data in an expander."""
+    with st.expander("⚖️ GPT-5 Evaluation", expanded=False):
+        # Overall score
+        overall = eval_data.get("overall_score", 0)
+        st.metric("Overall Score", f"{overall:.2f}/10")
+        
+        # Individual scores
+        if "scores" in eval_data:
+            st.write("**Detailed Scores:**")
+            for key, value in eval_data["scores"].items():
+                formatted_key = key.replace("_", " ").title()
+                st.write(f"• {formatted_key}: {value:.2f}/10")
+        
+        # Strengths and weaknesses
+        if "strengths" in eval_data and eval_data["strengths"]:
+            st.write("**Strengths:**")
+            for strength in eval_data["strengths"]:
+                st.write(f"✓ {strength}")
+        
+        if "weaknesses" in eval_data and eval_data["weaknesses"]:
+            st.write("**Areas for Improvement:**")
+            for weakness in eval_data["weaknesses"]:
+                st.write(f"• {weakness}")
+        
+        if "suggestions" in eval_data and eval_data["suggestions"]:
+            st.write(f"**Suggestions:** {eval_data['suggestions']}")
 
 
 def build_prompt(system_prompt: str, messages: List[Dict[str, str]]) -> str:

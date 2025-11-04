@@ -15,6 +15,14 @@ try:
 except ImportError as e:
     RAG_AVAILABLE = False
     print(f"RAG modules not available: {e}")
+
+# Import evaluation modules
+try:
+    from evaluation import LLMJudge
+    EVAL_AVAILABLE = True
+except ImportError as e:
+    EVAL_AVAILABLE = False
+    print(f"Evaluation modules not available: {e}")
 BASE_DIR = pathlib.Path(__file__).parent
 MODELS_PATH = BASE_DIR / "models.json"
 DEFAULT_SYSTEM_PROMPT = (
@@ -51,6 +59,19 @@ def render_finetuned_chat(models: List[EndpointConfig]):
         system_prompt = st.text_area("System prompt", value=DEFAULT_SYSTEM_PROMPT, height=120)
         temperature = st.slider("Temperature", 0.0, 1.5, 0.7, 0.1)
         max_new_tokens = st.slider("Max new tokens", 16, 4000, 256, 16)
+        
+        st.divider()
+        st.header("Evaluation")
+        use_judge = st.checkbox("Enable GPT-5 Judge", value=False, help="Use GPT-5 to evaluate response quality")
+        
+        # Initialize judge if enabled
+        judge = None
+        if use_judge and EVAL_AVAILABLE:
+            try:
+                judge = LLMJudge(model_name="gpt-5")
+            except Exception as e:
+                st.error(f"Failed to initialize judge: {e}")
+                use_judge = False
 
         if st.button("Clear chat"):
             st.session_state.history[selected.key] = []
@@ -104,9 +125,28 @@ def render_finetuned_chat(models: List[EndpointConfig]):
                 else:
                     st.error(f"Generation failed: {e}")
                 return
+        # Evaluate response if judge is enabled
+        eval_result = None
+        if use_judge and judge and EVAL_AVAILABLE:
+            try:
+                eval_result = judge.evaluate_response(user_input, text, use_cache=True)
+            except Exception as e:
+                st.error(f"Evaluation failed: {e}")
+        
+        # Append assistant message with evaluation
+        assistant_msg = {"role": "assistant", "content": text}
+        if eval_result:
+            assistant_msg["evaluation"] = {
+                "scores": eval_result.scores,
+                "overall_score": eval_result.overall_score,
+                "strengths": eval_result.strengths,
+                "weaknesses": eval_result.weaknesses,
+                "suggestions": eval_result.suggestions
+            }
+        
         # Append assistant message once (avoid accidental duplicates across reruns)
         if not (messages and messages[-1].get("role") == "assistant" and messages[-1].get("content") == text):
-            messages.append({"role": "assistant", "content": text})
+            messages.append(assistant_msg)
         st.rerun()
 
 
@@ -151,6 +191,19 @@ def render_rag_chat():
         temperature = st.slider("Temperature", 0.0, 1.5, 0.7, 0.1)
         max_new_tokens = st.slider("Max new tokens", 16, 4000, 256, 16)
         memory_length = st.slider("Conversation memory", 1, 10, 5, 1)
+        
+        st.divider()
+        st.header("Evaluation")
+        use_judge = st.checkbox("Enable GPT-5 Judge", value=False, help="Use GPT-5 to evaluate response quality")
+        
+        # Initialize judge if enabled
+        judge = None
+        if use_judge and EVAL_AVAILABLE:
+            try:
+                judge = LLMJudge(model_name="gpt-5")
+            except Exception as e:
+                st.error(f"Failed to initialize judge: {e}")
+                use_judge = False
 
         if st.button("Clear chat"):
             st.session_state.rag_history[selected_model] = []
@@ -179,7 +232,9 @@ def render_rag_chat():
                     history, 
                     temperature, 
                     model_id=selected_model,
-                    system_prompt=system_prompt
+                    system_prompt=system_prompt,
+                    evaluate_with_judge=use_judge,
+                    judge=judge
                 )
                 
                 # Update conversation history and messages first
