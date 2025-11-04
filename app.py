@@ -124,6 +124,9 @@ def render_finetuned_chat(models: List[EndpointConfig]):
                     st.info("💡 Try: 1) Check if the endpoint is active on HuggingFace, 2) Use the GPT-4o model instead, or 3) Try the RAG models")
                 elif "401" in error_msg:
                     st.error(f"⚠️ Authentication failed. Please check your API keys in the .env file.")
+                elif "404" in error_msg:
+                    st.error("⚠️ Endpoint not found (404). The configured URL may be incorrect or missing the required path.")
+                    st.info("💡 If you're using a Hugging Face Inference Endpoint, ensure it's running and the URL includes the proper route. For OpenAI-compatible mode, the path should be /v1/chat/completions. For HF text-generation-inference, /generate may be required.")
                 else:
                     st.error(f"Generation failed: {e}")
                 return

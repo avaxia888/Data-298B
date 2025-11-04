@@ -92,17 +92,36 @@ class LLMClient:
             hf_payload["parameters"] = {"return_full_text": False}
 
         with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(
-                endpoint.url,
-                headers={
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=hf_payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            try:
+                resp = client.post(
+                    endpoint.url,
+                    headers={
+                        "Accept": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=hf_payload,
+                )
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                # Some Hugging Face Inference Endpoints (TGI) expect /generate instead of root
+                if e.response is not None and e.response.status_code == 404:
+                    alt_url = endpoint.url.rstrip("/") + "/generate"
+                    alt_resp = client.post(
+                        alt_url,
+                        headers={
+                            "Accept": "application/json",
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=hf_payload,
+                    )
+                    alt_resp.raise_for_status()
+                    data = alt_resp.json()
+                else:
+                    raise
+            else:
+                data = resp.json()
 
         if isinstance(data, list) and data and isinstance(data[0], dict) and "generated_text" in data[0]:
             return str(data[0]["generated_text"]).strip()
@@ -142,6 +161,14 @@ class LLMClient:
             oa_payload.update(mapped)
 
         url = base_url or "https://api.openai.com/v1/chat/completions"
+        # If targeting a Hugging Face Inference Endpoint with OpenAI-compatible payloads,
+        # ensure we hit the /v1/chat/completions route.
+        if url and (
+            "huggingface.cloud" in url
+            and not url.rstrip("/").endswith("/v1/chat/completions")
+            and not url.rstrip("/").endswith("/chat/completions")
+        ):
+            url = url.rstrip("/") + "/v1/chat/completions"
 
         with httpx.Client(timeout=self.timeout) as client:
             try:
