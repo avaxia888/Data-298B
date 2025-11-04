@@ -49,7 +49,9 @@ def render_finetuned_chat(models: List[EndpointConfig]):
             set_view("home")
 
         st.header("Model")
-        model_names = {m.name: m.key for m in models}
+        # Filter out evaluation-only models like GPT-5 judge
+        chatbot_models = [m for m in models if not m.key.endswith("-judge") and "judge" not in m.key.lower()]
+        model_names = {m.name: m.key for m in chatbot_models}
         selected_name = st.selectbox("Choose a model", list(model_names.keys()))
         selected_key = model_names[selected_name]
         selected = next(m for m in models if m.key == selected_key)
