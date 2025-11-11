@@ -16,6 +16,7 @@ ENV/
 *.egg-info/
 dist/
 build/
+.venv/
 
 # Streamlit
 .streamlit/secrets.toml

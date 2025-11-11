@@ -19,10 +19,15 @@
     "mode": "openai"
   },
   {
-    "key": "gpt-5-judge",
-    "name": "GPT-5 Evaluation Judge",
-    "url": "gpt-5",
-    "mode": "openai",
-    "purpose": "evaluation"
+    "key": "rag-claude-3-haiku",
+    "name": "RAG - Claude 3 Haiku",
+    "url": "anthropic.claude-3-haiku-20240307-v1:0",
+    "mode": "rag"
+  },
+  {
+    "key": "rag-mistral-7b",
+    "name": "RAG - Mistral 7B",
+    "url": "mistral.mistral-7b-instruct-v0:2",
+    "mode": "rag"
   }
 ]

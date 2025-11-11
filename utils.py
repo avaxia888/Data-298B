@@ -1,6 +1,8 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import streamlit as st
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 
 def ensure_state(models: List[Any]) -> None:
@@ -111,3 +113,52 @@ def llama3_chat_template(system_prompt: Optional[str], messages: Optional[List[D
         parts.append(wrap(role, content))
     parts.append("<|start_header_id|>assistant<|end_header_id|>\n")
     return "".join(parts)
+
+
+# ---- RAG helpers (embedding, retrieval, prompt, metrics) ----
+
+def embed_query(model: Any, query: str) -> List[float]:
+    return model.encode(query).tolist()
+
+
+def retrieve_context(index: Any, query_vector: List[float], top_k: int = 5) -> List[str]:
+    res = index.query(vector=query_vector, top_k=top_k, include_metadata=True, namespace="")
+    return [m["metadata"]["text"] for m in res.get("matches", []) if "metadata" in m and "text" in m["metadata"]]
+
+
+def build_rag_prompt(
+    query: str,
+    context: List[str],
+    history: List[Dict[str, str]],
+    system_prompt: Optional[str] = None,
+    *,
+    include_system: bool = True,
+) -> str:
+    context_text = "\n\n".join(context)
+    history_text = "".join([f"Human: {h['user']}\nAssistant: {h['assistant']}\n" for h in history])
+    base_prompt = ""
+    if include_system:
+        base_prompt = system_prompt or (
+            "You are Neil deGrasse Tyson, astrophysicist and science communicator.\n\n"
+            "- Be accurate and engaging.\n- Prefer grounded answers using the provided context.\n"
+            "- Keep casual replies concise.\n"
+        )
+    context_block = f"<<CONTEXT>>\n{context_text}\n<</CONTEXT>>" if context_text else ""
+    convo_block = f"Conversation so far:\n{history_text}\n\n" if history_text else ""
+    kb_block = f"Context from knowledge base:\n{context_block}\n\n" if context_block else ""
+    header = f"{base_prompt}\n\n" if base_prompt else ""
+    return (
+        f"{header}"
+        f"{kb_block}"
+        f"{convo_block}"
+        f"User: {query}\nAssistant:"
+    )
+
+
+def evaluate_retrieval(model: Any, query: str, chunks: List[str]) -> Dict[str, float]:
+    if not chunks:
+        return {"avg": 0.0, "top": 0.0}
+    qv = model.encode([query])[0]
+    cv = model.encode(chunks)
+    sims = cosine_similarity([qv], cv)[0]
+    return {"avg": float(np.mean(sims)), "top": float(np.max(sims))}
