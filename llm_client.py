@@ -3,10 +3,23 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+import boto3
 import httpx
-from utils import llama3_chat_template
+from pinecone import Pinecone as PC
+from sentence_transformers import SentenceTransformer
+from utils import (
+    build_rag_prompt,
+    embed_query,
+    evaluate_retrieval,
+    extract_bedrock_text,
+    extract_hf_text,
+    get_env,
+    llama3_chat_template,
+    retrieve_context,
+    sanitize_output,
+)
 
 
 @dataclass
@@ -22,24 +35,26 @@ class EndpointConfig:
 def load_models_config(path: str) -> List[EndpointConfig]:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    out: List[EndpointConfig] = []
-    for item in data:
-        out.append(
-            EndpointConfig(
-                key=item["key"],
-                name=item.get("name", item["key"]),
-                url=item["url"],
-                mode=item.get("mode", "openai"),
-                model=item.get("model"),
-                base_url=item.get("base_url"),
-            )
+    return [
+        EndpointConfig(
+            key=item["key"],
+            name=item.get("name", item["key"]),
+            url=item["url"],
+            mode=item.get("mode", "openai"),
+            model=item.get("model"),
+            base_url=item.get("base_url"),
         )
-    return out
+        for item in data
+    ]
 
 
 class LLMClient:
-    def __init__(self, token: Optional[str] = None, timeout: float = 60.0):
+    def __init__(self, timeout: float = 60.0):
         self.timeout = timeout
+        self._embed_model: Optional[SentenceTransformer] = None
+        self._pinecone_index = None
+        self._bedrock = None
+
 
     def generate(
         self,
@@ -50,17 +65,70 @@ class LLMClient:
         messages: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
     ) -> str:
-        """Generate text using the configured endpoint.
-
-        Supports two modes:
-        - openai: OpenAI-compatible Chat Completions API
-        - huggingface: Hugging Face Inference API (string inputs)
-        """
         mode = (endpoint.mode or "openai").lower()
         if mode == "huggingface":
             return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
-        # Default to OpenAI-compatible
         return self._generate_openai(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+
+    def _ensure_rag_setup(self):
+        if self._embed_model is None:
+            self._embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", trust_remote_code=False)
+
+        if self._pinecone_index is None:
+            api_key = get_env(["PINECONE_API_KEY"], required=True)
+            index_name = get_env(["PINECONE_INDEX"], default="neil-degrasse-tyson-embeddings")
+            self._pinecone_index = PC(api_key=api_key).Index(index_name)
+
+        if self._bedrock is None:
+            region = get_env(["AWS_REGION", "AWS_DEFAULT_REGION"], default="us-east-1")
+            kwargs = {"region_name": region}
+            if aws_key := os.getenv("AWS_ACCESS_KEY_ID"):
+                if aws_secret := os.getenv("AWS_SECRET_ACCESS_KEY"):
+                    kwargs.update({"aws_access_key_id": aws_key, "aws_secret_access_key": aws_secret})
+            self._bedrock = boto3.client("bedrock-runtime", **kwargs)
+
+    def rag_answer(
+        self,
+        query: str,
+        history: List[Dict[str, str]],
+        *,
+        temperature: float,
+        model_id: str,
+        system_prompt: Optional[str] = None,
+    ) -> Tuple[str, Dict[str, Any]]:
+        self._ensure_rag_setup()
+        qv = embed_query(self._embed_model, query)
+        chunks = retrieve_context(self._pinecone_index, qv)
+        prompt = build_rag_prompt(query, chunks, history, system_prompt, include_system=False)
+        lower = (model_id or "").lower()
+        if "anthropic" in lower:
+            system_field = system_prompt
+            payload = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 800,
+                "temperature": temperature,
+                "top_p": 0.9,
+                "system": system_field,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                ],
+            }
+        elif "mistral" in lower or lower.startswith("mistral."):
+            payload = {"prompt": f"<s>[INST] {prompt} [/INST]", "max_tokens": 800, "temperature": temperature}
+        else:
+            payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
+
+        res = self._bedrock.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(payload),
+        )
+        body = json.loads(res["body"].read())
+        raw_text = extract_bedrock_text(body)
+        text = sanitize_output(raw_text)
+        metrics = evaluate_retrieval(self._embed_model, query, chunks)
+        return text, metrics
 
     def _generate_huggingface(
         self,
@@ -73,61 +141,38 @@ class LLMClient:
     ) -> str:
         api_key = os.getenv("HUGGINGFACE_API_TOKEN") or os.getenv("HF_TOKEN")
         if not api_key:
-            raise RuntimeError("Missing API key: set HUGGINGFACE_API_TOKEN (or HF_TOKEN).")
+            raise RuntimeError("Missing API key: set HUGGINGFACE_API_TOKEN or HF_TOKEN")
 
         temp_msgs = messages or ([{"role": "user", "content": prompt}] if prompt else None)
-        templated = llama3_chat_template(system_prompt, temp_msgs)
-        inputs = templated or prompt or system_prompt or ""
-        hf_payload: Dict[str, Any] = {"inputs": inputs, "parameters": {}}
-
+        inputs = llama3_chat_template(system_prompt, temp_msgs) or prompt or system_prompt or ""
+        
+        params = {"return_full_text": False}
         if parameters:
-            p: Dict[str, Any] = {}
             if "temperature" in parameters:
-                p["temperature"] = parameters["temperature"]
+                params["temperature"] = parameters["temperature"]
             if "max_new_tokens" in parameters:
-                p["max_new_tokens"] = parameters["max_new_tokens"]
-            p["return_full_text"] = False
-            hf_payload["parameters"] = p
-        else:
-            hf_payload["parameters"] = {"return_full_text": False}
+                params["max_new_tokens"] = parameters["max_new_tokens"]
 
+        payload = {"inputs": inputs, "parameters": params}
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        
         with httpx.Client(timeout=self.timeout) as client:
             try:
-                resp = client.post(
-                    endpoint.url,
-                    headers={
-                        "Accept": "application/json",
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=hf_payload,
-                )
+                resp = client.post(endpoint.url, headers=headers, json=payload)
                 resp.raise_for_status()
+                return sanitize_output(extract_hf_text(resp.json()))
             except httpx.HTTPStatusError as e:
-                # Some Hugging Face Inference Endpoints (TGI) expect /generate instead of root
-                if e.response is not None and e.response.status_code == 404:
+                if e.response and e.response.status_code == 404:
+                    # Try /generate endpoint for TGI
                     alt_url = endpoint.url.rstrip("/") + "/generate"
-                    alt_resp = client.post(
-                        alt_url,
-                        headers={
-                            "Accept": "application/json",
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=hf_payload,
-                    )
-                    alt_resp.raise_for_status()
-                    data = alt_resp.json()
-                else:
-                    raise
-            else:
-                data = resp.json()
-
-        if isinstance(data, list) and data and isinstance(data[0], dict) and "generated_text" in data[0]:
-            return str(data[0]["generated_text"]).strip()
-        if isinstance(data, dict) and "generated_text" in data:
-            return str(data["generated_text"]).strip()
-        return json.dumps(data)
+                    resp = client.post(alt_url, headers=headers, json=payload)
+                    resp.raise_for_status()
+                    return sanitize_output(extract_hf_text(resp.json()))
+                raise
 
     def _generate_openai(
         self,
@@ -141,52 +186,48 @@ class LLMClient:
         is_url = endpoint.url.startswith("https://")
         model_id = endpoint.model if is_url else endpoint.url
         base_url = endpoint.url if is_url else endpoint.base_url
+        
         if not model_id:
-            raise RuntimeError("OpenAI mode requires a model id (set 'url' or 'model' in models.json).")
+            raise RuntimeError("OpenAI mode requires a model id")
 
-        api_key = os.getenv("OPENAI_API_KEY" if (not base_url or "api.openai.com" in (base_url or "")) else "HUGGINGFACE_API_TOKEN")
+        if not base_url or "api.openai.com" in base_url:
+            api_key = os.getenv("OPENAI_API_KEY")
+        else:
+            api_key = os.getenv("HUGGINGFACE_API_TOKEN")
+        
         if not api_key:
-            raise RuntimeError("Missing API key: set OPENAI_API_KEY or HUGGINGFACE_API_TOKEN.")
+            raise RuntimeError("Missing API key: set OPENAI_API_KEY or HUGGINGFACE_API_TOKEN")
 
-        chat_messages: List[Dict[str, str]] = ([] if not system_prompt else [{"role": "system", "content": system_prompt}]) + (
-            messages or [{"role": "user", "content": prompt}]
-        )
-        oa_payload: Dict[str, Any] = {"model": model_id, "messages": chat_messages}
+        chat_messages = []
+        if system_prompt:
+            chat_messages.append({"role": "system", "content": system_prompt})
+        chat_messages.extend(messages or [{"role": "user", "content": prompt}])
+        
+        payload = {"model": model_id, "messages": chat_messages}
+        
         if parameters:
-            mapped = {k: parameters[k] for k in ("top_p", "frequency_penalty", "presence_penalty", "stop") if k in parameters}
             if "temperature" in parameters:
-                mapped["temperature"] = parameters["temperature"]
+                payload["temperature"] = parameters["temperature"]
             if "max_new_tokens" in parameters:
-                mapped["max_tokens"] = parameters["max_new_tokens"]
-            oa_payload.update(mapped)
+                payload["max_tokens"] = parameters["max_new_tokens"]
+            for key in ("top_p", "frequency_penalty", "presence_penalty", "stop"):
+                if key in parameters:
+                    payload[key] = parameters[key]
 
         url = base_url or "https://api.openai.com/v1/chat/completions"
-        # If targeting a Hugging Face Inference Endpoint with OpenAI-compatible payloads,
-        # ensure we hit the /v1/chat/completions route.
-        if url and (
-            "huggingface.cloud" in url
-            and not url.rstrip("/").endswith("/v1/chat/completions")
-            and not url.rstrip("/").endswith("/chat/completions")
-        ):
+        if "huggingface.cloud" in url and not url.endswith(("/v1/chat/completions", "/chat/completions")):
             url = url.rstrip("/") + "/v1/chat/completions"
 
         with httpx.Client(timeout=self.timeout) as client:
-            try:
-                resp = client.post(
-                    url,
-                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-                    json=oa_payload,
-                )
-                resp.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                detail = e.response.text if e.response is not None else str(e)
-                code = e.response.status_code if e.response is not None else "unknown"
-                raise RuntimeError(f"OpenAI error ({code}): {detail}") from e
+            resp = client.post(
+                url,
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+                json=payload,
+            )
+            resp.raise_for_status()
             data = resp.json()
+            if isinstance(data, dict) and (choices := data.get("choices")):
+                if content := choices[0].get("message", {}).get("content"):
+                    return sanitize_output(content)
+            return sanitize_output(json.dumps(data))
 
-        choices = data.get("choices") if isinstance(data, dict) else None
-        if choices:
-            content = choices[0].get("message", {}).get("content")
-            if isinstance(content, str):
-                return content
-        return json.dumps(data)
