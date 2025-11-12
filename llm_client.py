@@ -21,6 +21,12 @@ from utils import (
     sanitize_output,
 )
 
+try:
+    from fish_audio_sdk import Session as FishAudioSession, TTSRequest as FishAudioTTSRequest
+except ImportError:  # pragma: no cover - optional dependency
+    FishAudioSession = None
+    FishAudioTTSRequest = None
+
 
 @dataclass
 class EndpointConfig:
@@ -54,6 +60,10 @@ class LLMClient:
         self._embed_model: Optional[SentenceTransformer] = None
         self._pinecone_index = None
         self._bedrock = None
+        self._fish_session: Any = None
+        self._fish_reference_id: Optional[str] = None
+        self._fish_backend: str = os.getenv("FISH_AUDIO_BACKEND", "s1")
+        self._fish_audio_format: str = os.getenv("FISH_AUDIO_FORMAT", "mp3")
 
 
     def generate(
@@ -69,6 +79,52 @@ class LLMClient:
         if mode == "huggingface":
             return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
         return self._generate_openai(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+
+    def _ensure_fish_audio(self) -> None:
+        if FishAudioSession is None or FishAudioTTSRequest is None:
+            raise RuntimeError(
+                "fish-audio-sdk is not installed. Install it with 'pip install fish-audio-sdk'."
+            )
+
+        if self._fish_session is None:
+            api_key = get_env(["FISH_AUDIO_API_KEY"], required=True)
+            self._fish_session = FishAudioSession(api_key)
+
+        if self._fish_reference_id is None:
+            reference_id = get_env(["FISH_AUDIO_REFERENCE_ID", "FISH_AUDIO_MODEL_ID"], required=True)
+            self._fish_reference_id = reference_id
+
+    def synthesize_speech(
+        self,
+        text: str,
+        *,
+        reference_id: Optional[str] = None,
+        backend: Optional[str] = None,
+        audio_format: Optional[str] = None,
+    ) -> Tuple[Optional[bytes], str]:
+        fmt = (audio_format or os.getenv("FISH_AUDIO_FORMAT") or self._fish_audio_format or "mp3").lower()
+        if not text or not text.strip():
+            return None, fmt
+
+        self._ensure_fish_audio()
+
+        resolved_reference = reference_id or self._fish_reference_id
+        if not resolved_reference:
+            raise RuntimeError("Fish Audio reference id is not configured.")
+
+        backend_name = backend or os.getenv("FISH_AUDIO_BACKEND") or self._fish_backend or "s1"
+
+        request = FishAudioTTSRequest(text=text.strip(), reference_id=resolved_reference, format=fmt)
+
+        audio_buffer = bytearray()
+        try:
+            for chunk in self._fish_session.tts(request, backend=backend_name):
+                if chunk:
+                    audio_buffer.extend(chunk)
+        except Exception as exc:  # pragma: no cover - network/service errors
+            raise RuntimeError(f"Fish Audio synthesis failed: {exc}") from exc
+
+        return (bytes(audio_buffer) if audio_buffer else None, fmt)
 
     def _ensure_rag_setup(self):
         if self._embed_model is None:

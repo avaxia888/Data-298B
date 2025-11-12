@@ -1,10 +1,13 @@
+import base64
 import json
 import os
 import re
 from typing import Any, Dict, Iterable, List, Optional
+from uuid import uuid4
 
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -147,13 +150,161 @@ def evaluate_retrieval(model: Any, query: str, chunks: List[str]) -> Dict[str, f
     return {"avg": float(np.mean(sims)), "top": float(np.max(sims))}
 
 
-def render_messages(messages: List[Dict[str, str]]) -> None:
-    for msg in messages:
+def render_messages(messages: List[Dict[str, str]], conversation_key: str) -> None:
+    tracker: Dict[str, str] = st.session_state.setdefault("audio_autoplay_tracker", {})
+    last_played_id = tracker.get(conversation_key)
+
+    audio_entries: List[tuple[int, str]] = []
+    for idx, m in enumerate(messages):
+        if m.get("role") == "assistant" and m.get("audio"):
+            message_id = m.get("message_uid") or f"{conversation_key}-{idx}"
+            audio_entries.append((idx, message_id))
+
+    last_audio_idx = audio_entries[-1][0] if audio_entries else None
+    last_audio_id = audio_entries[-1][1] if audio_entries else None
+
+    for idx, msg in enumerate(messages):
         with st.chat_message(msg.get("role", "assistant")):
             st.markdown(msg.get("content", ""))
 
             if msg.get("role") != "assistant":
                 continue
+
+            audio_data = msg.get("audio")
+            if audio_data:
+                mime = msg.get("audio_format", "audio/mp3")
+                try:
+                    raw_bytes: bytes
+                    if isinstance(audio_data, (bytes, bytearray)):
+                        raw_bytes = bytes(audio_data)
+                    else:
+                        raw_bytes = base64.b64decode(audio_data)
+                except Exception:
+                    raw_bytes = b""
+
+                if raw_bytes:
+                    message_id = msg.get("message_uid") or f"{conversation_key}-{idx}"
+                    should_autoplay = bool(
+                        last_audio_idx is not None
+                        and idx == last_audio_idx
+                        and last_audio_id is not None
+                        and message_id != last_played_id
+                    )
+
+                    if should_autoplay and last_audio_id is not None:
+                        tracker[conversation_key] = last_audio_id
+
+                    audio_dom_id = f"audio-player-{idx}-{uuid4().hex}"
+                    button_dom_id = f"audio-button-{idx}-{uuid4().hex}"
+                    encoded = base64.b64encode(raw_bytes).decode("utf-8")
+                    autoplay_label = "Pause" if should_autoplay else "Resume"
+                    auto_flag = "true" if should_autoplay else "false"
+
+                    html = f"""
+                        <style>
+                        .tts-wrapper {{
+                            display: flex;
+                            flex-direction: column;
+                            gap: 0.5rem;
+                            margin: 0.35rem 0 0.1rem 0;
+                        }}
+                        .tts-button {{
+                            align-self: flex-start;
+                            background: linear-gradient(135deg, #6c5ce7, #0984e3);
+                            color: white;
+                            border: none;
+                            border-radius: 999px;
+                            padding: 0.4rem 1rem;
+                            font-size: 0.875rem;
+                            font-weight: 600;
+                            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+                            cursor: pointer;
+                            transition: transform 0.15s ease, box-shadow 0.15s ease;
+                        }}
+                        .tts-button:hover {{
+                            transform: translateY(-1px);
+                            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+                        }}
+                        .tts-button:active {{
+                            transform: translateY(0);
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                        }}
+                        </style>
+                        <div class=\"tts-wrapper\">
+                            <audio id=\"{audio_dom_id}\" style=\"width:100%;\" preload=\"auto\">
+                                <source src=\"data:{mime};base64,{encoded}\">
+                            </audio>
+                            <button id=\"{button_dom_id}\" class=\"tts-button\">{autoplay_label}</button>
+                        </div>
+                        <script>
+                        (function(){{
+                            const audio = document.getElementById('{audio_dom_id}');
+                            const button = document.getElementById('{button_dom_id}');
+                            if(!audio || !button){{return;}}
+
+                            window.__activeAudio = window.__activeAudio || null;
+                            window.__pauseOnNewRequest = window.__pauseOnNewRequest || function(){{
+                                if(window.__activeAudio){{
+                                    const prev = window.__activeAudio;
+                                    prev.pause();
+                                    if(prev.__controlButton){{
+                                        prev.__controlButton.textContent = 'Resume';
+                                    }}
+                                    window.__activeAudio = null;
+                                }}
+                            }};
+
+                            function updateButton(audioEl, label){{
+                                if(audioEl && audioEl.__controlButton){{
+                                    audioEl.__controlButton.textContent = label;
+                                }}
+                            }}
+
+                            function setActive(audioEl){{
+                                if(window.__activeAudio && window.__activeAudio !== audioEl){{
+                                    updateButton(window.__activeAudio, 'Resume');
+                                    window.__activeAudio.pause();
+                                }}
+                                window.__activeAudio = audioEl;
+                                updateButton(audioEl, 'Pause');
+                            }}
+
+                            function playAudio(){{
+                                window.__pauseOnNewRequest();
+                                const promise = audio.play();
+                                if(promise){{promise.catch(()=>{{}});}}
+                                setActive(audio);
+                            }}
+
+                            function pauseAudio(){{
+                                audio.pause();
+                                if(window.__activeAudio === audio){{
+                                    window.__activeAudio = null;
+                                }}
+                                updateButton(audio, 'Resume');
+                            }}
+
+                            audio.__controlButton = button;
+
+                            if({auto_flag}){{
+                                playAudio();
+                            }} else {{
+                                button.textContent = 'Resume';
+                            }}
+
+                            button.addEventListener('click', function(){{
+                                if(audio.paused){{
+                                    playAudio();
+                                }} else {{
+                                    pauseAudio();
+                                }}
+                            }});
+
+                            audio.addEventListener('ended', pauseAudio);
+                        }})();
+                        </script>
+                    """
+                    components.html(html, height=120)
 
             metrics = msg.get("metrics")
             if metrics:
