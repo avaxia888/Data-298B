@@ -31,9 +31,10 @@
     "mode": "rag"
   },
   {
-    "key": "qwen-2.5-7b-instruct-finetuned",
-    "name": "Qwen 2.5 7B Instruct Finetuned",
-    "url": "https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud",
-    "mode": "openai"
-  }
+  "key": "qwen-2.5-7b-merged-neil",
+  "name": "Qwen 2.5 7B Merged Neil Finetuned",
+  "url": "https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud",
+  "mode": "openai",
+  "model": "varunpruthviraj/qwen2.5-7b-merged-neil"
+}
 ]
