@@ -8,7 +8,7 @@
   {
     "key": "mistral-7b-neil",
     "name": "Mistral Finetuned LoRA",
-    "url": "https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/v1/",
+    "url": "https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/",
     "mode": "openai",
     "model": "tdvoroch/tyson-Mistral-LoRA-merged"
   },
@@ -19,10 +19,21 @@
     "mode": "openai"
   },
   {
-    "key": "qwen-2.5-7b-instruct",
-    "name": "Qwen 2.5 7B Instruct (finetuned)",
+    "key": "rag-claude-3-haiku",
+    "name": "RAG - Claude 3 Haiku",
+    "url": "anthropic.claude-3-haiku-20240307-v1:0",
+    "mode": "rag"
+  },
+  {
+    "key": "rag-mistral-7b",
+    "name": "RAG - Mistral 7B",
+    "url": "mistral.mistral-7b-instruct-v0:2",
+    "mode": "rag"
+  },
+  {
+    "key": "qwen-2.5-7b-instruct-finetuned",
+    "name": "Qwen 2.5 7B Instruct Finetuned",
     "url": "https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud",
-    "mode": "openai",
-    "model": "qwen-2.5-7b-instruct-finetuned"
+    "mode": "openai"
   }
 ]
