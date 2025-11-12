@@ -1,4 +1,5 @@
 import pathlib
+from uuid import uuid4
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -55,10 +56,11 @@ def main():
     effective_system_prompt = system_prompt.rstrip()
 
     messages = st.session_state.history[selected.key]
-    render_messages(messages)
+    render_messages(messages, selected.key)
 
     user_input = st.chat_input("Ask Neil about the cosmos…")
     if user_input:
+        st.write("<script>window.__pauseOnNewRequest && window.__pauseOnNewRequest();</script>", unsafe_allow_html=True)
         messages.append({"role": "user", "content": user_input})
 
         with st.spinner("Thinking…"):
@@ -66,6 +68,8 @@ def main():
                 hist_key = f"rag_conv_{selected.key}"
                 history = st.session_state.get(hist_key, [])
                 client = LLMClient()
+                audio_bytes = None
+                audio_mime = None
                 try:
                     text, metrics = client.rag_answer(
                         query=user_input,
@@ -77,12 +81,28 @@ def main():
                 except Exception as e:
                     st.error(f"RAG generation failed: {e}")
                     return
-                messages.append({"role": "assistant", "content": text, "metrics": metrics})
+                try:
+                    audio_bytes, audio_fmt = client.synthesize_speech(text)
+                    audio_mime = "audio/wav" if audio_fmt == "pcm" else f"audio/{audio_fmt}"
+                except Exception as audio_error:
+                    st.warning(f"Text generated, but TTS failed: {audio_error}")
+                assistant_payload = {
+                    "role": "assistant",
+                    "content": text,
+                    "metrics": metrics,
+                    "message_uid": str(uuid4()),
+                }
+                if audio_bytes:
+                    assistant_payload["audio"] = audio_bytes
+                    assistant_payload["audio_format"] = audio_mime
+                messages.append(assistant_payload)
                 history.append({"user": user_input, "assistant": text})
                 st.session_state[hist_key] = history
             else:
                 chat_messages = build_chat_messages(messages)
                 client = LLMClient()
+                audio_bytes = None
+                audio_mime = None
                 try:
                     text = client.generate(
                         endpoint=selected,
@@ -97,7 +117,20 @@ def main():
                 except Exception as e:
                     st.error(f"Generation failed: {e}")
                     return
-                messages.append({"role": "assistant", "content": text})
+                try:
+                    audio_bytes, audio_fmt = client.synthesize_speech(text)
+                    audio_mime = "audio/wav" if audio_fmt == "pcm" else f"audio/{audio_fmt}"
+                except Exception as audio_error:
+                    st.warning(f"Text generated, but TTS failed: {audio_error}")
+                assistant_payload = {
+                    "role": "assistant",
+                    "content": text,
+                    "message_uid": str(uuid4()),
+                }
+                if audio_bytes:
+                    assistant_payload["audio"] = audio_bytes
+                    assistant_payload["audio_format"] = audio_mime
+                messages.append(assistant_payload)
         st.rerun()
 
 if __name__ == "__main__":
