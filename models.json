@@ -1,1 +1,28 @@
-[{\n  \"key\": \"llama-3-8b-neil\",\n  \"name\": \"Llama-3 8B Finetuned LoRA\",\n  \"url\": \"https://sw7vbx9erzaac8mo.us-east-1.aws.endpoints.huggingface.cloud\",\n  \"mode\": \"huggingface\"\n},\n{\n  \"key\": \"mistral-7b-neil\",\n  \"name\": \"Mistral Finetuned LoRA\",\n  \"url\": \"https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/v1/\",\n  \"mode\": \"openai\",\n  \"model\": \"tdvoroch/tyson-Mistral-LoRA-merged\"\n},\n{\n  \"key\": \"tyson-ft-gpt-4o-mini\",\n  \"name\": \"GPT-4o-mini Finetuned LoRA\",\n  \"url\": \"ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe\",\n  \"mode\": \"openai\"\n},\n{\n  \"key\": \"qwen-2.5-7b-instruct\",\n  \"name\": \"Qwen 2.5 7B Instruct (finetuned)\",\n  \"url\": \"https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud\",\n  \"mode\": \"openai\",\n  \"model\": \"qwen-2.5-7b-instruct-finetuned\"\n}\n]
+[
+  {
+    "key": "llama-3-8b-neil",
+    "name": "Llama-3 8B Finetuned LoRA",
+    "url": "https://sw7vbx9erzaac8mo.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "huggingface"
+  },
+  {
+    "key": "mistral-7b-neil",
+    "name": "Mistral Finetuned LoRA",
+    "url": "https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/v1/",
+    "mode": "openai",
+    "model": "tdvoroch/tyson-Mistral-LoRA-merged"
+  },
+  {
+    "key": "tyson-ft-gpt-4o-mini",
+    "name": "GPT-4o-mini Finetuned LoRA",
+    "url": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
+    "mode": "openai"
+  },
+  {
+    "key": "qwen-2.5-7b-instruct",
+    "name": "Qwen 2.5 7B Instruct (finetuned)",
+    "url": "https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "openai",
+    "model": "qwen-2.5-7b-instruct-finetuned"
+  }
+]
