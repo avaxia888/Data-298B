@@ -143,6 +143,15 @@ class LLMClient:
                     kwargs.update({"aws_access_key_id": aws_key, "aws_secret_access_key": aws_secret})
             self._bedrock = boto3.client("bedrock-runtime", **kwargs)
 
+    def _invoke_bedrock(self, model_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        res = self._bedrock.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(payload),
+        )
+        return json.loads(res["body"].read())
+
     def rag_answer(
         self,
         query: str,
@@ -174,13 +183,7 @@ class LLMClient:
         else:
             payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
 
-        res = self._bedrock.invoke_model(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(payload),
-        )
-        body = json.loads(res["body"].read())
+        body = self._invoke_bedrock(model_id, payload)
         raw_text = extract_bedrock_text(body)
         text = sanitize_output(raw_text)
         metrics = evaluate_retrieval(self._embed_model, query, chunks)
@@ -275,11 +278,8 @@ class LLMClient:
             url = url.rstrip("/") + "/v1/chat/completions"
 
         with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(
-                url,
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-                json=payload,
-            )
+            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+            resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
             if isinstance(data, dict) and (choices := data.get("choices")):

@@ -19,9 +19,9 @@
     "mode": "openai"
   },
   {
-    "key": "rag-claude-3-haiku",
-    "name": "RAG - Claude 3 Haiku",
-    "url": "anthropic.claude-3-haiku-20240307-v1:0",
+    "key": "rag-claude-3.5-haiku",
+    "name": "RAG - Claude 3.5 Haiku",
+    "url": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
     "mode": "rag"
   },
   {
