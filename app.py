@@ -3,7 +3,9 @@ from uuid import uuid4
 
 import streamlit as st
 from dotenv import load_dotenv
-from llm_client import LLMClient, load_models_config
+from services.llm_client import LLMClient, load_models_config
+from services.rag import RagService
+from services.speech import SpeechService
 from utils import ensure_state, render_messages, build_chat_messages
 from prompt_template import DEFAULT_SYSTEM_PROMPT
 
@@ -67,11 +69,12 @@ def main():
             if (selected.mode or "").lower() == "rag":
                 hist_key = f"rag_conv_{selected.key}"
                 history = st.session_state.get(hist_key, [])
-                client = LLMClient()
+                rag = RagService()
+                speech = SpeechService()
                 audio_bytes = None
                 audio_mime = None
                 try:
-                    text, metrics = client.rag_answer(
+                    text, metrics = rag.answer(
                         query=user_input,
                         history=history[-memory_length:] if 'memory_length' in locals() else history[-5:],
                         temperature=float(temperature),
@@ -82,7 +85,7 @@ def main():
                     st.error(f"RAG generation failed: {e}")
                     return
                 try:
-                    audio_bytes, audio_fmt = client.synthesize_speech(text)
+                    audio_bytes, audio_fmt = speech.synthesize(text)
                     audio_mime = "audio/wav" if audio_fmt == "pcm" else f"audio/{audio_fmt}"
                 except Exception as audio_error:
                     st.warning(f"Text generated, but TTS failed: {audio_error}")
@@ -100,11 +103,12 @@ def main():
                 st.session_state[hist_key] = history
             else:
                 chat_messages = build_chat_messages(messages)
-                client = LLMClient()
+                gen = LLMClient()
+                speech = SpeechService()
                 audio_bytes = None
                 audio_mime = None
                 try:
-                    text = client.generate(
+                    text = gen.generate(
                         endpoint=selected,
                         prompt="",
                         parameters={
@@ -118,7 +122,7 @@ def main():
                     st.error(f"Generation failed: {e}")
                     return
                 try:
-                    audio_bytes, audio_fmt = client.synthesize_speech(text)
+                    audio_bytes, audio_fmt = speech.synthesize(text)
                     audio_mime = "audio/wav" if audio_fmt == "pcm" else f"audio/{audio_fmt}"
                 except Exception as audio_error:
                     st.warning(f"Text generated, but TTS failed: {audio_error}")
