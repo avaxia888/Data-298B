@@ -19,8 +19,7 @@ from utils import (
 
 
 class RagService:
-    def __init__(self, *, timeout: float = 60.0):
-        self.timeout = timeout
+    def __init__(self):
         self._embed_model: Optional[SentenceTransformer] = None
         self._pinecone_index = None
         self._bedrock = None
@@ -56,7 +55,7 @@ class RagService:
         chunks = retrieve_context(self._pinecone_index, qv)
         prompt = build_rag_prompt(query, chunks, history, system_prompt, include_system=False)
 
-        lower = (model_id or "").lower()
+        lower = model_id
         if "anthropic" in lower:
             payload = {
                 "anthropic_version": "bedrock-2023-05-31",
@@ -68,7 +67,7 @@ class RagService:
                     {"role": "user", "content": [{"type": "text", "text": prompt}]}
                 ],
             }
-        elif "mistral" in lower or lower.startswith("mistral."):
+        elif "mistral" in lower:
             payload = {"prompt": f"<s>[INST] {prompt} [/INST]", "max_tokens": 800, "temperature": temperature}
         else:
             payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}

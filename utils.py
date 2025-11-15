@@ -2,7 +2,7 @@ import base64
 import json
 import os
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
@@ -68,6 +68,20 @@ def sanitize_output(text: str) -> str:
     return cleaned.lstrip("\n ")
 
 
+def audio_payload_or_none(text: str, speech_service: Any) -> Tuple[Optional[bytes], Optional[str]]:
+    try:
+        audio_bytes, audio_fmt = speech_service.synthesize(text)
+    except Exception as exc:
+        st.warning(f"Text generated, but TTS failed: {exc}")
+        return None, None
+
+    if not audio_bytes:
+        return None, None
+
+    mime = "audio/wav" if audio_fmt == "pcm" else f"audio/{audio_fmt}"
+    return audio_bytes, mime
+
+
 def _render_retrieval_metrics(metrics: Dict[str, float]) -> None:
     with st.expander("Retrieval Metrics", expanded=False):
         st.write(f"**Average Similarity:** {metrics.get('avg', 0.0):.3f}")
@@ -81,6 +95,18 @@ def ensure_state(models: List[Any]) -> None:
         key = getattr(m, "key", None)
         if key is not None:
             st.session_state.history.setdefault(key, [])
+
+
+def categorize_models(models: List[Any]) -> Tuple[List[Any], List[Any]]:
+    finetuned: List[Any] = []
+    rag_models: List[Any] = []
+    for model in models:
+        mode = (getattr(model, "mode", "") or "").lower()
+        if mode == "rag":
+            rag_models.append(model)
+        elif mode != "evaluation":
+            finetuned.append(model)
+    return finetuned, rag_models
 
 
 def build_chat_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
@@ -138,7 +164,7 @@ def build_rag_prompt(
         sections.append(f"Conversation so far:\n{history_block}".rstrip())
 
     sections.append(f"User: {query}\nAssistant:")
-    return "\n\n".join(sections)
+    return "\n".join(sections)
 
 
 def evaluate_retrieval(model: Any, query: str, chunks: List[str]) -> Dict[str, float]:

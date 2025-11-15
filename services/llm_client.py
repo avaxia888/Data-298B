@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import httpx
+from utils import llama3_chat_template, extract_hf_text, sanitize_output
 
 
 @dataclass
 class EndpointConfig:
     key: str
     name: str
-    url: str
+    url: Optional[str] = None
     mode: str = "openai"
     model: Optional[str] = None
     base_url: Optional[str] = None
@@ -25,7 +26,7 @@ def load_models_config(path: str) -> List[EndpointConfig]:
         EndpointConfig(
             key=item["key"],
             name=item.get("name", item["key"]),
-            url=item["url"],
+            url=item.get("url"),
             mode=item.get("mode", "openai"),
             model=item.get("model"),
             base_url=item.get("base_url"),
@@ -35,9 +36,14 @@ def load_models_config(path: str) -> List[EndpointConfig]:
 
 
 class LLMClient:
-    def __init__(self, timeout: float = 60.0):
-        self.timeout = timeout
+    def __init__(self):
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.hf_token = os.getenv("HUGGINGFACE_API_TOKEN")
+        self.default_openai_base = "https://api.openai.com/v1/chat/completions"
+        self.openai_base_headers: Dict[str, str] = {"Content-Type": "application/json", **({"Authorization": f"Bearer {self.openai_key}"} if self.openai_key else {})}
+        self.hf_base_headers: Dict[str, str] = {"Content-Type": "application/json", **({"Authorization": f"Bearer {self.hf_token}"} if self.hf_token else {})}
 
+    
     def generate(
         self,
         endpoint: EndpointConfig,
@@ -50,8 +56,10 @@ class LLMClient:
         mode = (endpoint.mode or "openai").lower()
         if mode == "huggingface":
             return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
-        return self._generate_openai(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
-
+        if mode == "openai":
+            return self._generate_openai(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+    
+    
     def _generate_huggingface(
         self,
         endpoint: EndpointConfig,
@@ -61,15 +69,13 @@ class LLMClient:
         messages: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
     ) -> str:
-        from utils import llama3_chat_template, extract_hf_text, sanitize_output  # lazy import to avoid cycles
-
-        api_key = os.getenv("HUGGINGFACE_API_TOKEN") or os.getenv("HF_TOKEN")
-        if not api_key:
+        if not endpoint.url:
+            raise RuntimeError("Hugging Face endpoints must define a 'url' in models.json")
+        if not self.hf_token:
             raise RuntimeError("Missing API key: set HUGGINGFACE_API_TOKEN or HF_TOKEN")
 
         temp_msgs = messages or ([{"role": "user", "content": prompt}] if prompt else None)
         inputs = llama3_chat_template(system_prompt, temp_msgs) or prompt or system_prompt or ""
-
         params = {"return_full_text": False}
         if parameters:
             if "temperature" in parameters:
@@ -78,17 +84,8 @@ class LLMClient:
                 params["max_new_tokens"] = parameters["max_new_tokens"]
 
         payload = {"inputs": inputs, "parameters": params}
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(endpoint.url, headers=headers, json=payload)
-            if resp.status_code == 404:
-                alt_url = endpoint.url.rstrip("/") + "/generate"
-                resp = client.post(alt_url, headers=headers, json=payload)
+        with httpx.Client() as client:
+            resp = client.post(endpoint.url, headers=dict(self.hf_base_headers), json=payload)
             resp.raise_for_status()
             return sanitize_output(extract_hf_text(resp.json()))
 
@@ -101,22 +98,14 @@ class LLMClient:
         messages: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
     ) -> str:
-        from utils import sanitize_output  # lazy
-
-        is_url = endpoint.url.startswith("https://")
-        model_id = endpoint.model if is_url else endpoint.url
-        base_url = endpoint.url if is_url else endpoint.base_url
-
+        model_id = endpoint.model
+        base_url = endpoint.base_url
         if not model_id:
-            raise RuntimeError("OpenAI mode requires a model id")
-
-        if not base_url or "api.openai.com" in base_url:
-            api_key = os.getenv("OPENAI_API_KEY")
-        else:
-            api_key = os.getenv("HUGGINGFACE_API_TOKEN")
-
-        if not api_key:
-            raise RuntimeError("Missing API key: set OPENAI_API_KEY or HUGGINGFACE_API_TOKEN")
+            raise RuntimeError(f"models.json missing 'model' for openai endpoint: {endpoint.key}")
+        if not base_url:
+            raise RuntimeError(f"models.json missing 'base_url' for openai endpoint: {endpoint.key}")
+        if not self.openai_key:
+            raise RuntimeError("Missing API key: set OPENAI_API_KEY")
 
         chat_messages = []
         if system_prompt:
@@ -134,18 +123,10 @@ class LLMClient:
                 if key in parameters:
                     payload[key] = parameters[key]
 
-        url = base_url or "https://api.openai.com/v1/chat/completions"
-        if "huggingface.cloud" in url and not url.endswith(("/v1/chat/completions", "/chat/completions")):
-            url = url.rstrip("/") + "/v1/chat/completions"
+        url = base_url
 
-        with httpx.Client(timeout=self.timeout) as client:
-            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-            org_id = os.getenv("OPENAI_ORG_ID") or os.getenv("OPENAI_ORGANIZATION")
-            if org_id:
-                headers["OpenAI-Organization"] = org_id
-            project_id = os.getenv("OPENAI_PROJECT_ID")
-            if project_id:
-                headers["OpenAI-Project"] = project_id
+        with httpx.Client() as client:
+            headers = dict(self.openai_base_headers)
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
