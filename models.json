@@ -15,8 +15,9 @@
   {
     "key": "tyson-ft-gpt-4o-mini",
     "name": "GPT-4o-mini (LoRA)",
-    "url": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
-    "mode": "openai"
+    "mode": "openai",
+    "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
+    "base_url": "https://api.openai.com/v1/chat/completions"
   },
   {
     "key": "rag-claude-3.5-haiku",
