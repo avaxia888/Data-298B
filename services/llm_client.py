@@ -54,6 +54,9 @@ class LLMClient:
         system_prompt: Optional[str] = None,
     ) -> str:
         mode = (endpoint.mode or "openai").lower()
+        # Qwen should use Hugging Face flow, not OpenAI
+        if endpoint.key == "qwen-2.5-7b-merged-neil":
+            return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
         if mode == "huggingface":
             return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
         if mode == "openai":
@@ -84,7 +87,7 @@ class LLMClient:
                 params["max_new_tokens"] = parameters["max_new_tokens"]
 
         payload = {"inputs": inputs, "parameters": params}
-        with httpx.Client() as client:
+        with httpx.Client(timeout=60.0) as client:
             resp = client.post(endpoint.url, headers=dict(self.hf_base_headers), json=payload)
             resp.raise_for_status()
             return sanitize_output(extract_hf_text(resp.json()))

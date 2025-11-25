@@ -6,13 +6,6 @@
     "mode": "huggingface"
   },
   {
-    "key": "mistral-7b-neil",
-    "name": "Mistral (LoRA)",
-    "url": "https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/",
-    "mode": "openai",
-    "model": "tdvoroch/tyson-Mistral-LoRA-merged"
-  },
-  {
     "key": "tyson-ft-gpt-4o-mini",
     "name": "GPT-4o-mini (LoRA)",
     "mode": "openai",
@@ -26,16 +19,11 @@
     "mode": "rag"
   },
   {
-    "key": "rag-mistral-7b",
-    "name": "RAG - Mistral 7B",
-    "url": "mistral.mistral-7b-instruct-v0:2",
-    "mode": "rag"
-  },
-  {
     "key": "qwen-2.5-7b-merged-neil",
     "name": "Qwen 2.5 7B (LoRA)",
-    "url": "https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud",
+    "url": "https://bmnyem42ee99hyf3.us-east-1.aws.endpoints.huggingface.cloud",
     "mode": "openai",
-    "model": "varunpruthviraj/qwen2.5-7b-merged-neil"
+    "model": "varunpruthviraj/qwen2.5-7b-merged-neil",
+    "base_url": "https://bmnyem42ee99hyf3.us-east-1.aws.endpoints.huggingface.cloud"
   }
 ]
