@@ -1,0 +1,47 @@
+[
+  {
+    "key": "llama-3-8b-neil",
+    "name": "Llama-3 8B (LoRA)",
+    "url": "https://sw7vbx9erzaac8mo.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "huggingface"
+  },
+  {
+    "key": "tyson-ft-gpt-4o-mini",
+    "name": "GPT-4o-mini (LoRA)",
+    "mode": "openai",
+    "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
+    "base_url": "https://api.openai.com/v1/chat/completions"
+  },
+  {
+    "key": "rag-claude-3.5-haiku",
+    "name": "RAG - Claude 3.5 Haiku",
+    "url": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+    "mode": "rag"
+  },
+  {
+    "key": "qwen25-ndt-ft_merged",
+    "name": "Qwen 2.5 7B (LoRA)",
+    "url": "https://ww8op30jynnr5qtc.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "openai",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "base_url": "https://ww8op30jynnr5qtc.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
+  },
+  {
+    "key": "gemma3-ndtv3",
+    "name": "Gemma 3 (LoRA)",
+    "url": "https://wvfwpzrfkat3683k.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "huggingface"
+  },
+  {
+    "key": "Qwen/Qwen2.5-7B-Instruct",
+    "name": "RAG - Qwen2.5-7B-Instruct",
+    "mode": "rag",
+    "url": "https://k02pzjwrophtu8ow.us-east-1.aws.endpoints.huggingface.cloud"
+  },
+  {
+    "key": "rag-gemma3-base",
+    "name": "RAG - Gemma 3 Base",
+    "url": "https://uhecln1yxxupd5v4.us-east-2.aws.endpoints.huggingface.cloud",
+    "mode": "rag"
+  }
+]

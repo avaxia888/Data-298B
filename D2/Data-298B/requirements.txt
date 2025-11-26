@@ -1,0 +1,10 @@
+streamlit==1.39.0
+httpx==0.27.2
+python-dotenv==1.0.1
+pyarrow==22.0.0
+fish-audio-sdk==2025.6.3
+boto3==1.38.11
+pinecone-client==5.0.1
+sentence-transformers==3.0.0  
+scikit-learn>=1.7.2,<1.8
+numpy>=2.2,<3

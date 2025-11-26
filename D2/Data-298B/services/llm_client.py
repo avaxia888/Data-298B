@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import httpx
+from utils import llama3_chat_template, extract_hf_text, sanitize_output
+
+
+@dataclass
+class EndpointConfig:
+    key: str
+    name: str
+    url: Optional[str] = None
+    mode: str = "openai"
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+
+
+def load_models_config(path: str) -> List[EndpointConfig]:
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return [
+        EndpointConfig(
+            key=item["key"],
+            name=item.get("name", item["key"]),
+            url=item.get("url"),
+            mode=item.get("mode", "openai"),
+            model=item.get("model"),
+            base_url=item.get("base_url"),
+        )
+        for item in data
+    ]
+
+
+class LLMClient:
+    def __init__(self):
+        self.openai_key = os.getenv("OPENAI_API_KEY")
+        self.hf_token = os.getenv("HUGGINGFACE_API_TOKEN") or os.getenv("HF_TOKEN")
+        self.default_openai_base = "https://api.openai.com/v1/chat/completions"
+        self.openai_base_headers: Dict[str, str] = {"Content-Type": "application/json", **({"Authorization": f"Bearer {self.openai_key}"} if self.openai_key else {})}
+        self.hf_base_headers: Dict[str, str] = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            **({"Authorization": f"Bearer {self.hf_token}"} if self.hf_token else {}),
+        }
+
+    
+    def generate(
+        self,
+        endpoint: EndpointConfig,
+        prompt: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        *,
+        messages: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        mode = (endpoint.mode or "openai").lower()
+        # Qwen should use Hugging Face flow, not OpenAI
+        if endpoint.key == "qwen-2.5-7b-merged-neil":
+            return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+        if mode == "huggingface":
+            return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+        if mode == "openai":
+            return self._generate_openai(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
+    
+    
+    def _generate_huggingface(
+        self,
+        endpoint: EndpointConfig,
+        prompt: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        *,
+        messages: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        if not endpoint.url:
+            raise RuntimeError("Hugging Face endpoints must define a 'url' in models.json")
+        if not self.hf_token:
+            raise RuntimeError("Missing API key: set HUGGINGFACE_API_TOKEN or HF_TOKEN")
+
+        temp_msgs = messages or ([{"role": "user", "content": prompt}] if prompt else None)
+        inputs = llama3_chat_template(system_prompt, temp_msgs) or prompt or system_prompt or ""
+        params = {"return_full_text": False}
+        if parameters:
+            if "temperature" in parameters:
+                params["temperature"] = parameters["temperature"]
+            if "max_new_tokens" in parameters:
+                params["max_new_tokens"] = parameters["max_new_tokens"]
+
+        payload = {"inputs": inputs, "parameters": params}
+
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(endpoint.url, headers=dict(self.hf_base_headers), json=payload)
+            print(resp.json(),endpoint,self.hf_base_headers)
+            resp.raise_for_status()
+            return sanitize_output(extract_hf_text(resp.json()))
+
+    def _generate_openai(
+        self,
+        endpoint: EndpointConfig,
+        prompt: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        *,
+        messages: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        model_id = endpoint.model
+        base_url = endpoint.base_url
+        if not model_id:
+            raise RuntimeError(f"models.json missing 'model' for openai endpoint: {endpoint.key}")
+        if not base_url:
+            raise RuntimeError(f"models.json missing 'base_url' for openai endpoint: {endpoint.key}")
+        if not self.openai_key:
+            raise RuntimeError("Missing API key: set OPENAI_API_KEY")
+
+        chat_messages = []
+        if system_prompt:
+            chat_messages.append({"role": "system", "content": system_prompt})
+        chat_messages.extend(messages or [{"role": "user", "content": prompt}])
+
+        payload = {"model": model_id, "messages": chat_messages}
+
+        if parameters:
+            if "temperature" in parameters:
+                payload["temperature"] = parameters["temperature"]
+            if "max_new_tokens" in parameters:
+                payload["max_tokens"] = parameters["max_new_tokens"]
+            for key in ("top_p", "frequency_penalty", "presence_penalty", "stop"):
+                if key in parameters:
+                    payload[key] = parameters[key]
+
+        url = base_url
+
+        with httpx.Client() as client:
+            headers = dict(self.openai_base_headers)
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and (choices := data.get("choices")):
+                if content := choices[0].get("message", {}).get("content"):
+                    return sanitize_output(content)
+            return sanitize_output(json.dumps(data))
