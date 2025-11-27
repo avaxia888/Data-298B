@@ -54,6 +54,9 @@ class LLMClient:
         system_prompt: Optional[str] = None,
     ) -> str:
         mode = (endpoint.mode or "openai").lower()
+        # Qwen should use Hugging Face flow, not OpenAI
+        if endpoint.key == "qwen-2.5-7b-merged-neil":
+            return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
         if mode == "huggingface":
             return self._generate_huggingface(endpoint, prompt, parameters, messages=messages, system_prompt=system_prompt)
         if mode == "openai":
