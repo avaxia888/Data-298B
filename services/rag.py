@@ -67,6 +67,7 @@ class RagService:
                     {"role": "user", "content": [{"type": "text", "text": prompt}]}
                 ],
             }
+        # Removed Mistral-specific payload logic
         else:
             payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
 
