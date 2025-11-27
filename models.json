@@ -1,41 +1,39 @@
 [
   {
     "key": "llama-3-8b-neil",
-    "name": "Llama-3 8B (LoRA)",
-    "url": "https://sw7vbx9erzaac8mo.us-east-1.aws.endpoints.huggingface.cloud",
-    "mode": "huggingface"
-  },
-  {
-    "key": "mistral-7b-neil",
-    "name": "Mistral (LoRA)",
-    "url": "https://d9u19sgekx8aem98.us-east-1.aws.endpoints.huggingface.cloud/",
+    "name": "Llama-3 8B",
+    "url": "https://p4sm89bo3j2x3khs.us-east-1.aws.endpoints.huggingface.cloud",
     "mode": "openai",
-    "model": "tdvoroch/tyson-Mistral-LoRA-merged"
+    "model": "meta-llama/Meta-Llama-3-8B-Instruct",
+    "base_url": "https://p4sm89bo3j2x3khs.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
   },
   {
     "key": "tyson-ft-gpt-4o-mini",
-    "name": "GPT-4o-mini (LoRA)",
+    "name": "GPT-4o-mini",
     "mode": "openai",
     "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
     "base_url": "https://api.openai.com/v1/chat/completions"
   },
   {
     "key": "rag-claude-3.5-haiku",
-    "name": "RAG - Claude 3.5 Haiku",
+    "name": "Claude 3.5 Haiku",
     "url": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
     "mode": "rag"
   },
-  {
-    "key": "rag-mistral-7b",
-    "name": "RAG - Mistral 7B",
-    "url": "mistral.mistral-7b-instruct-v0:2",
-    "mode": "rag"
-  },
+  
   {
     "key": "qwen-2.5-7b-merged-neil",
-    "name": "Qwen 2.5 7B (LoRA)",
-    "url": "https://ivb8apmbed5c99ww.us-east-1.aws.endpoints.huggingface.cloud",
-    "mode": "openai",
+    "name": "Qwen 2.5 7B",
+    "url": "https://q0r0ttpwwqejkk81.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "huggingface",
     "model": "varunpruthviraj/qwen2.5-7b-merged-neil"
+  },
+  {
+    "key": "gemma-3-ndtv3",
+    "name": "Gemma 3",
+    "url": "https://yoltt08l2v3cz7tu.us-east-1.aws.endpoints.huggingface.cloud",
+    "mode": "openai",
+    "model": "tdvoroch/gemma3-ndtv3",
+    "base_url": "https://yoltt08l2v3cz7tu.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
   }
 ]

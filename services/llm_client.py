@@ -84,7 +84,7 @@ class LLMClient:
                 params["max_new_tokens"] = parameters["max_new_tokens"]
 
         payload = {"inputs": inputs, "parameters": params}
-        with httpx.Client() as client:
+        with httpx.Client(timeout=120.0) as client:
             resp = client.post(endpoint.url, headers=dict(self.hf_base_headers), json=payload)
             resp.raise_for_status()
             return sanitize_output(extract_hf_text(resp.json()))
@@ -125,8 +125,21 @@ class LLMClient:
 
         url = base_url
 
-        with httpx.Client() as client:
-            headers = dict(self.openai_base_headers)
+        if not parameters:
+            host = url
+            if endpoint.key == "gemma-3-ndtv3":
+                payload["max_tokens"] = payload.get("max_tokens", 512)
+
+        with httpx.Client(timeout=60.0) as client:
+            headers: Dict[str, str] = {"Content-Type": "application/json"}
+            host = url
+            if "huggingface.cloud" in host or "aws.endpoints.huggingface" in host:
+                if self.hf_token:
+                    headers["Authorization"] = f"Bearer {self.hf_token}"
+            else:
+                if self.openai_key:
+                    headers["Authorization"] = f"Bearer {self.openai_key}"
+
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()

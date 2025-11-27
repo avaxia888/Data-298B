@@ -67,8 +67,7 @@ class RagService:
                     {"role": "user", "content": [{"type": "text", "text": prompt}]}
                 ],
             }
-        elif "mistral" in lower:
-            payload = {"prompt": f"<s>[INST] {prompt} [/INST]", "max_tokens": 800, "temperature": temperature}
+        # Removed Mistral-specific payload logic
         else:
             payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
 
