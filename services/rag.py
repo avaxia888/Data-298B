@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
+import httpx
 from pinecone import Pinecone as PC
 from sentence_transformers import SentenceTransformer
 from utils import (
@@ -41,13 +42,15 @@ class RagService:
                     kwargs.update({"aws_access_key_id": aws_key, "aws_secret_access_key": aws_secret})
             self._bedrock = boto3.client("bedrock-runtime", **kwargs)
 
+    from services.llm_client import EndpointConfig
+
     def answer(
         self,
         *,
         query: str,
         history: List[Dict[str, str]],
         temperature: float,
-        model_id: str,
+        endpoint: EndpointConfig,
         system_prompt: Optional[str] = None,
     ) -> Tuple[str, Dict[str, Any]]:
         self._ensure()
@@ -55,6 +58,39 @@ class RagService:
         chunks = retrieve_context(self._pinecone_index, qv)
         prompt = build_rag_prompt(query, chunks, history, system_prompt, include_system=False)
 
+        # Determine backend based on endpoint attributes
+        if endpoint.base_url:
+            # OpenAI-compatible endpoint (HF or OpenAI server)
+            hf_token = os.getenv("HUGGINGFACE_API_TOKEN")
+            headers = {"Content-Type": "application/json"}
+            if "huggingface" in endpoint.base_url and hf_token:
+                headers["Authorization"] = f"Bearer {hf_token}"
+            elif os.getenv("OPENAI_API_KEY"):
+                headers["Authorization"] = f"Bearer {os.getenv('OPENAI_API_KEY')}"
+
+            payload = {
+                "model": endpoint.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt or ""},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": 800,
+            }
+            with httpx.Client(timeout=120.0) as client:
+                resp = client.post(endpoint.base_url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                if isinstance(data, dict) and (choices := data.get("choices")):
+                    raw_text = choices[0]["message"]["content"]
+                else:
+                    raw_text = json.dumps(data)
+            text = sanitize_output(raw_text)
+            metrics = evaluate_retrieval(self._embed_model, query, chunks)
+            return text, metrics
+
+        # Fallback: Bedrock flow
+        model_id = endpoint.url
         lower = model_id
         if "anthropic" in lower:
             payload = {
