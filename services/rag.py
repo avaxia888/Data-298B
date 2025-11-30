@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import math
+from dataclasses import replace as _dc_replace
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
@@ -20,6 +21,7 @@ from utils import (
     sanitize_output,
 )
 from prompt_template import DEFAULT_SYSTEM_PROMPT
+from services.llm_client import LLMClient, EndpointConfig as _EP
 
 
 class RagService:
@@ -161,6 +163,10 @@ class RagService:
 
         self._ensure()
 
+        # Determine the underlying Bedrock model identifier from the selected endpoint
+        # For Bedrock-based RAG models we use the "url" field to store the modelId, otherwise fall back to "model".
+        model_id = endpoint.url or endpoint.model or ""
+
         # Model used for internal enhancements (rewrite/rerank/etc.)
         bedrock_for_aux = model_id
 
@@ -172,6 +178,36 @@ class RagService:
 
         # Embed using original MiniLM embedding model
         qv = embed_query(self._embed_model, rewritten_query)
+
+        # If the selected RAG endpoint is NOT a Bedrock model, switch to a simplified flow that
+        # still performs retrieval but uses the generic LLMClient for generation.
+        # Bedrock model identifiers do not start with http(s); HuggingFace/OpenAI endpoints do.
+        if not model_id or model_id.startswith("http"):
+
+            # Basic retrieval (no Bedrock-based reranking/compression)
+            raw_matches = retrieve_context(self._pinecone_index, qv, top_k=4)
+            prompt_ctx = build_rag_prompt(
+                query,
+                raw_matches,
+                history,
+                system_prompt or DEFAULT_SYSTEM_PROMPT,
+                include_system=True,
+            )
+
+            # Choose appropriate mode for the fallback endpoint
+            _mode = "openai" if endpoint.base_url else "huggingface"
+            tmp_endpoint: _EP = _dc_replace(endpoint, mode=_mode)
+            llm_client = LLMClient()
+            gen_params = {"temperature": temperature}
+            text = llm_client.generate(
+                endpoint=tmp_endpoint,
+                prompt="",  # we provide full prompt via messages to preserve persona
+                parameters=gen_params,
+                messages=[{"role": "user", "content": prompt_ctx}],
+                system_prompt=None,
+            )
+            metrics = evaluate_retrieval(self._embed_model, query, raw_matches)
+            return text, metrics
 
         # Retrieve candidates (larger set for improved reranking)
         top_k = 12
