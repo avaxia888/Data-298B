@@ -6,6 +6,7 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
+import httpx
 from pinecone import Pinecone as PC
 from sentence_transformers import SentenceTransformer
 
@@ -154,7 +155,7 @@ class RagService:
         query: str,
         history: List[Dict[str, str]],
         temperature: float,
-        model_id: str,
+        endpoint: EndpointConfig,
         system_prompt: Optional[str] = None,
     ) -> Tuple[str, Dict[str, Any]]:
 
@@ -225,6 +226,7 @@ class RagService:
                 "system": system_prompt or DEFAULT_SYSTEM_PROMPT,
                 "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
             }
+        # Removed Mistral-specific payload logic
         else:
             payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
 

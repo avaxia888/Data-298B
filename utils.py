@@ -65,12 +65,16 @@ def sanitize_output(text: str) -> str:
     cleaned = text
     for pattern in patterns:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^\s*[-•]\s+", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\*\*(.*?)\*\*", r"\1", cleaned)
+    cleaned = re.sub(r"\*(.*?)\*", r"\1", cleaned)
+    cleaned = re.sub(r"<\|eot_id\|>|<\|begin_of_text\|>", "", cleaned, flags=re.IGNORECASE)
     return cleaned.lstrip("\n ")
 
 
 def audio_payload_or_none(text: str, speech_service: Any) -> Tuple[Optional[bytes], Optional[str]]:
     try:
-        audio_bytes, audio_fmt = speech_service.synthesize(text)
+        audio_bytes, audio_fmt = speech_service.synthesize(sanitize_output(text))
     except Exception as exc:
         st.warning(f"Text generated, but TTS failed: {exc}")
         return None, None
