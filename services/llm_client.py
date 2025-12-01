@@ -107,8 +107,10 @@ class LLMClient:
             raise RuntimeError(f"models.json missing 'model' for openai endpoint: {endpoint.key}")
         if not base_url:
             raise RuntimeError(f"models.json missing 'base_url' for openai endpoint: {endpoint.key}")
-        if not self.openai_key:
-            raise RuntimeError("Missing API key: set OPENAI_API_KEY")
+        # Require an auth token: OPENAI_API_KEY for OpenAI hosts, or HF_TOKEN for
+        # Hugging Face router and other HF-hosted chat-completions endpoints.
+        if not self.openai_key and not ("huggingface" in base_url and self.hf_token):
+            raise RuntimeError("Missing API key: set OPENAI_API_KEY or HF_TOKEN")
 
         chat_messages = []
         if system_prompt:
@@ -136,7 +138,10 @@ class LLMClient:
         with httpx.Client(timeout=60.0) as client:
             headers: Dict[str, str] = {"Content-Type": "application/json"}
             host = url
-            if "huggingface.cloud" in host or "aws.endpoints.huggingface" in host:
+            # Determine which auth token header to send based on the host. Any Hugging Face
+            # inference endpoints (including the generic router.huggingface.co) should use the
+            # HF token, otherwise default to the OpenAI API key.
+            if "huggingface" in host:
                 if self.hf_token:
                     headers["Authorization"] = f"Bearer {self.hf_token}"
             else:

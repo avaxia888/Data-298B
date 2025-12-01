@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import math
+from dataclasses import replace as _dc_replace
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
@@ -20,6 +21,7 @@ from utils import (
     sanitize_output,
 )
 from prompt_template import DEFAULT_SYSTEM_PROMPT
+from services.llm_client import LLMClient, EndpointConfig as _EP
 
 
 class RagService:
@@ -181,8 +183,6 @@ class RagService:
         # still performs retrieval but uses the generic LLMClient for generation.
         # Bedrock model identifiers do not start with http(s); HuggingFace/OpenAI endpoints do.
         if not model_id or model_id.startswith("http"):
-            from dataclasses import replace as _dc_replace
-            from services.llm_client import LLMClient, EndpointConfig as _EP
 
             # Basic retrieval (no Bedrock-based reranking/compression)
             raw_matches = retrieve_context(self._pinecone_index, qv, top_k=4)
@@ -195,6 +195,9 @@ class RagService:
             )
 
             # Choose appropriate mode for the fallback endpoint
+            # Any endpoint that defines a base_url should use the OpenAI-compatible flow
+            # (router.huggingface.co implements the OpenAI Chat Completions API). When
+            # base_url is absent we assume the old-style HF inference endpoint.
             _mode = "openai" if endpoint.base_url else "huggingface"
             tmp_endpoint: _EP = _dc_replace(endpoint, mode=_mode)
             llm_client = LLMClient()

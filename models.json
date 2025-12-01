@@ -14,7 +14,7 @@
   },
   {
   "key": "qwen-2.5-7b-merged-neil",
-  "name": "Qwen 2.5 7B",
+  "name": "Qwen 2.5 7B FT",
   "url": "https://vxatp7b9avmnteir.us-east-1.aws.endpoints.huggingface.cloud",
   "mode": "huggingface",
   "model": "tdvoroch/qwen25-ndt-ft_merged"
@@ -28,20 +28,12 @@
   "base_url": "https://wvfwpzrfkat3683k.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
   },
   {
-    "key": "rag-qwen25-chat",
-    "name": "Qwen 2.5 Chat",
-    "url": "https://k02pzjwrophtu8ow.us-east-1.aws.endpoints.huggingface.cloud",
+    "key": "rag-qwen25-router",
+    "name": "Qwen 2.5 7B",
+    "url": "https://router.huggingface.co",
     "mode": "rag",
     "model": "Qwen/Qwen2.5-7B-Instruct",
-    "base_url": "https://k02pzjwrophtu8ow.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
-  },
-  {
-    "key": "rag-llama3-chat",
-    "name": "Llama 3 RAG",
-    "url": "https://x5ifspzuc7tvc3ij.us-east-1.aws.endpoints.huggingface.cloud",
-    "mode": "rag",
-    "model": "meta-llama/Meta-Llama-3-8B-Instruct",
-    "base_url": "https://x5ifspzuc7tvc3ij.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
+    "base_url": "https://router.huggingface.co/v1/chat/completions"
   },
   {
     "key": "llama3-ft-neil",
@@ -51,11 +43,19 @@
     "model": "neil-tyson-llama-3-8b-instru-yir"
   },
   {
-    "key": "rag-gemma3-12b-it",
-    "name": "Gemma 3 12B IT",
-    "url": "https://ngqgisfvic71hso1.us-east-1.aws.endpoints.huggingface.cloud",
+  "key": "rag-gemma3-router",
+  "name": "Gemma 3 12B",
+  "url": "https://router.huggingface.co",
+  "mode": "rag",
+  "model": "google/gemma-3-12b-it:featherless-ai",
+  "base_url": "https://router.huggingface.co/v1/chat/completions"
+  },
+  {
+    "key": "rag-llama3-router",
+    "name": "Llama 3 8B",
+    "url": "https://router.huggingface.co",
     "mode": "rag",
-    "model": "google/gemma-3-12b-it",
-    "base_url": "https://ngqgisfvic71hso1.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
+    "model": "meta-llama/Meta-Llama-3-8B-Instruct:novita",
+    "base_url": "https://router.huggingface.co/v1/chat/completions"
   }
 ]
