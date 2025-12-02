@@ -78,6 +78,19 @@ def sanitize_output(text: str) -> str:
     return cleaned.lstrip("\n ")
 
 
+def truncate_to_complete_sentence(text: str) -> str:
+    """Truncate text to the last complete sentence."""
+    last_period = text.rfind('.')
+    last_question = text.rfind('?')
+    last_exclaim = text.rfind('!')
+
+    last_end = max(last_period, last_question, last_exclaim)
+
+    if last_end > 0:
+        return text[:last_end + 1]
+    return text
+
+
 def audio_payload_or_none(text: str, speech_service: Any) -> Tuple[Optional[bytes], Optional[str]]:
     try:
         audio_bytes, audio_fmt = speech_service.synthesize(sanitize_output(text))
