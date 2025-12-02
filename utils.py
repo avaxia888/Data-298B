@@ -6,9 +6,15 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from uuid import uuid4
 
 import numpy as np
-import streamlit as st
-import streamlit.components.v1 as components
 from sklearn.metrics.pairwise import cosine_similarity
+
+# Make streamlit imports conditional - only needed for UI functions
+try:
+    import streamlit as st
+    import streamlit.components.v1 as components
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
 
 
 def _normalize_chat_role(role: str) -> str:
@@ -76,7 +82,8 @@ def audio_payload_or_none(text: str, speech_service: Any) -> Tuple[Optional[byte
     try:
         audio_bytes, audio_fmt = speech_service.synthesize(sanitize_output(text))
     except Exception as exc:
-        st.warning(f"Text generated, but TTS failed: {exc}")
+        if STREAMLIT_AVAILABLE:
+            st.warning(f"Text generated, but TTS failed: {exc}")
         return None, None
 
     if not audio_bytes:
@@ -87,12 +94,16 @@ def audio_payload_or_none(text: str, speech_service: Any) -> Tuple[Optional[byte
 
 
 def _render_retrieval_metrics(metrics: Dict[str, float]) -> None:
+    if not STREAMLIT_AVAILABLE:
+        return
     with st.expander("Retrieval Metrics", expanded=False):
         st.write(f"**Average Similarity:** {metrics.get('avg', 0.0):.3f}")
         st.write(f"**Top Similarity:** {metrics.get('top', 0.0):.3f}")
 
 
 def ensure_state(models: List[Any]) -> None:
+    if not STREAMLIT_AVAILABLE:
+        return
     if "history" not in st.session_state:
         st.session_state.history = {}
     for m in models:
@@ -137,8 +148,13 @@ def llama3_chat_template(system_prompt: Optional[str], messages: Optional[List[D
     return "".join(parts)
 
 
-def embed_query(model: Any, query: str) -> List[float]:
-    return model.encode(query).tolist()
+def embed_query(client: Any, query: str) -> List[float]:
+    """Generate embeddings using OpenAI's text-embedding-3-small model."""
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=query
+    )
+    return response.data[0].embedding
 
 
 def retrieve_context(index: Any, query_vector: List[float], top_k: int = 5) -> List[str]:
@@ -171,16 +187,33 @@ def build_rag_prompt(
     return "\n".join(sections)
 
 
-def evaluate_retrieval(model: Any, query: str, chunks: List[str]) -> Dict[str, float]:
+def evaluate_retrieval(client: Any, query: str, chunks: List[str]) -> Dict[str, float]:
+    """Evaluate retrieval metrics using OpenAI embeddings."""
     if not chunks:
         return {"avg": 0.0, "top": 0.0}
-    qv = model.encode([query])[0]
-    cv = model.encode(chunks)
+    
+    # Get query embedding
+    query_response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=query
+    )
+    qv = np.array(query_response.data[0].embedding)
+    
+    # Get chunk embeddings
+    chunk_response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=chunks
+    )
+    cv = np.array([data.embedding for data in chunk_response.data])
+    
+    # Calculate similarities
     sims = cosine_similarity([qv], cv)[0]
     return {"avg": float(np.mean(sims)), "top": float(np.max(sims))}
 
 
 def render_messages(messages: List[Dict[str, str]], conversation_key: str) -> None:
+    if not STREAMLIT_AVAILABLE:
+        return
     tracker: Dict[str, str] = st.session_state.setdefault("audio_autoplay_tracker", {})
     last_played_id = tracker.get(conversation_key)
 

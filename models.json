@@ -13,6 +13,14 @@
     "mode": "rag"
   },
   {
+    "key": "rag-gpt-4o-mini",
+    "name": "GPT-4o-mini",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "mode": "rag",
+    "model": "gpt-4o-mini",
+    "base_url": "https://api.openai.com/v1/chat/completions"
+  },
+  {
   "key": "qwen-2.5-7b-merged-neil",
   "name": "Qwen 2.5 7B FT",
   "url": "https://vxatp7b9avmnteir.us-east-1.aws.endpoints.huggingface.cloud",

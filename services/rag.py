@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import boto3
 import httpx
 from pinecone import Pinecone as PC
-from sentence_transformers import SentenceTransformer
+from openai import OpenAI
 
 from utils import (
     build_rag_prompt,
@@ -26,18 +26,19 @@ from services.llm_client import LLMClient, EndpointConfig as _EP
 
 class RagService:
     def __init__(self):
-        self._embed_model: Optional[SentenceTransformer] = None
+        self._openai_client: Optional[OpenAI] = None
         self._pinecone_index = None
         self._bedrock = None
 
     def _ensure(self) -> None:
-        # Load MiniLM embedder (unchanged from original implementation)
-        if self._embed_model is None:
-            self._embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", trust_remote_code=False)
+        # Initialize OpenAI client for text-embedding-3-small
+        if self._openai_client is None:
+            api_key = get_env(["OPENAI_API_KEY"], required=True)
+            self._openai_client = OpenAI(api_key=api_key)
 
         if self._pinecone_index is None:
             api_key = get_env(["PINECONE_API_KEY"], required=True)
-            index_name = get_env(["PINECONE_INDEX"], default="neil-degrasse-tyson-embeddings")
+            index_name = get_env(["PINECONE_INDEX"], default="tyson-embeddings-openai-1536")
             self._pinecone_index = PC(api_key=api_key).Index(index_name)
 
         if self._bedrock is None:
@@ -176,8 +177,8 @@ class RagService:
         except Exception:
             rewritten_query = query
 
-        # Embed using original MiniLM embedding model
-        qv = embed_query(self._embed_model, rewritten_query)
+        # Embed using OpenAI text-embedding-3-small model
+        qv = embed_query(self._openai_client, rewritten_query)
 
         # If the selected RAG endpoint is NOT a Bedrock model, switch to a simplified flow that
         # still performs retrieval but uses the generic LLMClient for generation.
@@ -209,7 +210,7 @@ class RagService:
                 messages=[{"role": "user", "content": prompt_ctx}],
                 system_prompt=None,
             )
-            metrics = evaluate_retrieval(self._embed_model, query, raw_matches)
+            metrics = evaluate_retrieval(self._openai_client, query, raw_matches)
             return text, metrics
 
         # Retrieve candidates (larger set for improved reranking)
@@ -292,7 +293,7 @@ class RagService:
         except Exception:
             pass
 
-        # Compute retrieval metrics (original MiniLM logic preserved)
-        metrics = evaluate_retrieval(self._embed_model, query, top_passages)
+        # Compute retrieval metrics using OpenAI embeddings
+        metrics = evaluate_retrieval(self._openai_client, query, top_passages)
 
         return text, metrics
