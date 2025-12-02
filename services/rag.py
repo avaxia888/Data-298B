@@ -14,7 +14,7 @@ from openai import OpenAI
 from utils import (
     build_rag_prompt,
     embed_query,
-    evaluate_retrieval,
+    evaluate_answer_alignment,
     extract_bedrock_text,
     get_env,
     retrieve_context,
@@ -210,7 +210,8 @@ class RagService:
                 messages=[{"role": "user", "content": prompt_ctx}],
                 system_prompt=None,
             )
-            metrics = evaluate_retrieval(self._openai_client, query, raw_matches)
+            # Calculate context alignment metrics
+            metrics = evaluate_answer_alignment(self._openai_client, query, text, raw_matches)
             return text, metrics
 
         # Retrieve candidates (larger set for improved reranking)
@@ -224,7 +225,8 @@ class RagService:
             body = self._invoke_bedrock(model_id, payload)
             raw_text = extract_bedrock_text(body)
             text = sanitize_output(raw_text)
-            metrics = {"avg": 0.0, "top": 0.0}
+            # No context, return empty metrics
+            metrics = {"query_alignment": 0.0, "context_alignment": 0.0}
             return text, metrics
 
         # Rerank passages using Bedrock scoring
@@ -293,7 +295,6 @@ class RagService:
         except Exception:
             pass
 
-        # Compute retrieval metrics using OpenAI embeddings
-        metrics = evaluate_retrieval(self._openai_client, query, top_passages)
-
+        # Compute context alignment metrics
+        metrics = evaluate_answer_alignment(self._openai_client, query, text, top_passages)
         return text, metrics

@@ -93,12 +93,36 @@ def audio_payload_or_none(text: str, speech_service: Any) -> Tuple[Optional[byte
     return audio_bytes, mime
 
 
-def _render_retrieval_metrics(metrics: Dict[str, float]) -> None:
+def _render_retrieval_metrics(metrics: Dict[str, Any]) -> None:
     if not STREAMLIT_AVAILABLE:
         return
-    with st.expander("Retrieval Metrics", expanded=False):
-        st.write(f"**Average Similarity:** {metrics.get('avg', 0.0):.3f}")
-        st.write(f"**Top Similarity:** {metrics.get('top', 0.0):.3f}")
+    with st.expander("Answer Alignment Metrics", expanded=False):
+        # Query-Answer and Context-Answer Alignment
+        if 'query_alignment' in metrics:
+            query_align = metrics.get('query_alignment', 0.0)
+            context_align = metrics.get('context_alignment', 0.0)
+            
+            # Determine labels for query alignment
+            if query_align >= 0.7:
+                query_label = "High"
+            elif query_align >= 0.5:
+                query_label = "Medium"
+            else:
+                query_label = "Low"
+            
+            # Determine labels for context alignment
+            if context_align >= 0.7:
+                context_label = "High"
+            elif context_align >= 0.5:
+                context_label = "Medium"
+            else:
+                context_label = "Low"
+            
+            st.write(f"**Query-Answer Alignment**: {query_align:.3f} ({query_label})")
+            st.write(f"*How well the answer addresses the question*")
+            st.write("")
+            st.write(f"**Context-Answer Alignment**: {context_align:.3f} ({context_label})")
+            st.write(f"*How well the answer uses retrieved context*")
 
 
 def ensure_state(models: List[Any]) -> None:
@@ -187,28 +211,69 @@ def build_rag_prompt(
     return "\n".join(sections)
 
 
-def evaluate_retrieval(client: Any, query: str, chunks: List[str]) -> Dict[str, float]:
-    """Evaluate retrieval metrics using OpenAI embeddings."""
-    if not chunks:
-        return {"avg": 0.0, "top": 0.0}
+def evaluate_answer_alignment(client: Any, query: str, answer: str, chunks: List[str]) -> Dict[str, float]:
+    """Evaluate how well the answer addresses the query and uses retrieved context."""
+    if not answer:
+        return {"query_alignment": 0.0, "context_alignment": 0.0}
     
-    # Get query embedding
+    # Get embedding for answer
+    answer_response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=answer
+    )
+    av = np.array(answer_response.data[0].embedding)
+    
+    # Get embedding for query
     query_response = client.embeddings.create(
         model="text-embedding-3-small",
         input=query
     )
     qv = np.array(query_response.data[0].embedding)
     
-    # Get chunk embeddings
-    chunk_response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=chunks
-    )
-    cv = np.array([data.embedding for data in chunk_response.data])
+    # Calculate query-answer alignment (how well answer addresses the question)
+    query_alignment = float(cosine_similarity([qv], [av])[0][0])
     
-    # Calculate similarities
-    sims = cosine_similarity([qv], cv)[0]
-    return {"avg": float(np.mean(sims)), "top": float(np.max(sims))}
+    # Calculate context-answer alignment if chunks exist
+    context_alignment = 0.0
+    if chunks:
+        # Combine chunks into context
+        context = " ".join(chunks[:3])  # Use top 3 chunks to avoid token limits
+        context_response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=context[:8000]  # Limit context length
+        )
+        cv = np.array(context_response.data[0].embedding)
+        
+        # Calculate how well answer uses the retrieved context
+        context_alignment = float(cosine_similarity([av], [cv])[0][0])
+    
+    return {
+        "query_alignment": query_alignment,
+        "context_alignment": context_alignment
+    }
+
+
+def get_retrieval_diagnostics(chunks: List[str]) -> Dict[str, Any]:
+    """Get diagnostic information about retrieved chunks."""
+    if not chunks:
+        return {
+            "num_chunks": 0,
+            "avg_length": 0,
+            "total_context": 0
+        }
+    
+    return {
+        "num_chunks": len(chunks),
+        "avg_length": int(np.mean([len(chunk) for chunk in chunks])),
+        "total_context": sum(len(chunk) for chunk in chunks)
+    }
+
+
+# Keep for backward compatibility but deprecated
+def evaluate_retrieval(client: Any, query: str, chunks: List[str]) -> Dict[str, float]:
+    """Deprecated: Use evaluate_answer_alignment instead."""
+    # Return dummy values to not break existing code
+    return {"avg": 0.5, "top": 0.7}
 
 
 def render_messages(messages: List[Dict[str, str]], conversation_key: str) -> None:

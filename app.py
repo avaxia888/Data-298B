@@ -15,7 +15,7 @@ from utils import (
     embed_query,
     retrieve_context,
     build_rag_prompt,
-    evaluate_retrieval,
+    evaluate_answer_alignment,
 )
 from prompt_template import DEFAULT_SYSTEM_PROMPT
 
@@ -151,10 +151,13 @@ def main():
                 st.error(f"RAG+Finetuned generation failed: {exc}")
                 return
 
+            # Calculate context alignment metrics
+            metrics = evaluate_answer_alignment(embed_model, user_input, text, chunks)
+            
             assistant_payload = {
                 "role": "assistant",
                 "content": text,
-                "metrics": evaluate_retrieval(embed_model, user_input, chunks),
+                "metrics": metrics,
                 "message_uid": str(uuid4()),
             }
             append_audio(assistant_payload, text)
