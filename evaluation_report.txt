@@ -1,0 +1,52 @@
+============================================================
+MODEL EVALUATION REPORT
+Timestamp: 2025-12-01T21:15:14.613724
+============================================================
+
+CATEGORY PERFORMANCE SUMMARY:
+------------------------------
+
+BASE MODELS WITH RAG:
+  Average Similarity: 0.530
+  Average Response Time: 6347.3 ms
+  Models evaluated: 4
+
+FINETUNED MODELS (NO RAG):
+  Average Similarity: 0.056
+  Average Response Time: 426.1 ms
+  Models evaluated: 4
+
+FINETUNED MODELS WITH RAG:
+  Average Similarity: 0.056
+  Average Response Time: 679.9 ms
+  Models evaluated: 4
+
+============================================================
+TOP PERFORMING MODELS (by similarity):
+------------------------------
+1. Claude 3.5 Haiku
+   Category: base_rag
+   Similarity: 0.560
+   Response Time: 8114.7 ms
+
+2. Llama 3 8B
+   Category: base_rag
+   Similarity: 0.528
+   Response Time: 3690.0 ms
+
+3. Qwen 2.5 7B
+   Category: base_rag
+   Similarity: 0.525
+   Response Time: 2358.8 ms
+
+4. Gemma 3 12B
+   Category: base_rag
+   Similarity: 0.506
+   Response Time: 11225.5 ms
+
+5. GPT-4o-mini
+   Category: finetuned
+   Similarity: 0.059
+   Response Time: 551.1 ms
+
+============================================================
