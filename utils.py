@@ -123,6 +123,27 @@ def _render_retrieval_metrics(metrics: Dict[str, Any]) -> None:
             st.write("")
             st.write(f"**Context-Answer Alignment**: {context_align:.3f} ({context_label})")
             st.write(f"*How well the answer uses retrieved context*")
+            
+            # Show which chunks the answer is pulling from
+            if 'chunk_alignments' in metrics and metrics['chunk_alignments']:
+                st.write("")
+                st.write("**Top Aligned Chunks:**")
+                for i, chunk_info in enumerate(metrics['chunk_alignments'], 1):
+                    alignment = chunk_info['alignment']
+                    preview = chunk_info['preview']
+                    chunk_idx = chunk_info['chunk_index']
+                    
+                    # Determine alignment strength
+                    if alignment >= 0.7:
+                        strength = "Strong"
+                    elif alignment >= 0.5:
+                        strength = "Moderate"
+                    else:
+                        strength = "Weak"
+                    
+                    st.write(f"{i}. **Chunk {chunk_idx + 1}** - Alignment: {alignment:.3f} ({strength})")
+                    st.write(f"   *{preview}*")
+                    st.write("")
 
 
 def ensure_state(models: List[Any]) -> None:
@@ -211,10 +232,10 @@ def build_rag_prompt(
     return "\n".join(sections)
 
 
-def evaluate_answer_alignment(client: Any, query: str, answer: str, chunks: List[str]) -> Dict[str, float]:
+def evaluate_answer_alignment(client: Any, query: str, answer: str, chunks: List[str]) -> Dict[str, Any]:
     """Evaluate how well the answer addresses the query and uses retrieved context."""
     if not answer:
-        return {"query_alignment": 0.0, "context_alignment": 0.0}
+        return {"query_alignment": 0.0, "context_alignment": 0.0, "top_aligned_chunk": None, "chunk_alignments": []}
     
     # Get embedding for answer
     answer_response = client.embeddings.create(
@@ -235,21 +256,39 @@ def evaluate_answer_alignment(client: Any, query: str, answer: str, chunks: List
     
     # Calculate context-answer alignment if chunks exist
     context_alignment = 0.0
+    top_aligned_chunk = None
+    chunk_alignments = []
+    
     if chunks:
-        # Combine chunks into context
-        context = " ".join(chunks[:3])  # Use top 3 chunks to avoid token limits
-        context_response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=context[:8000]  # Limit context length
-        )
-        cv = np.array(context_response.data[0].embedding)
+        # Calculate alignment with each individual chunk
+        for i, chunk in enumerate(chunks[:5]):  # Analyze up to 5 chunks
+            chunk_response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=chunk[:2000]  # Limit chunk length
+            )
+            chunk_vec = np.array(chunk_response.data[0].embedding)
+            
+            # Calculate alignment between answer and this chunk
+            chunk_sim = float(cosine_similarity([av], [chunk_vec])[0][0])
+            chunk_alignments.append({
+                "chunk_index": i,
+                "alignment": chunk_sim,
+                "preview": chunk[:100] + "..." if len(chunk) > 100 else chunk
+            })
         
-        # Calculate how well answer uses the retrieved context
-        context_alignment = float(cosine_similarity([av], [cv])[0][0])
+        # Sort by alignment score
+        chunk_alignments.sort(key=lambda x: x["alignment"], reverse=True)
+        
+        # Get the most aligned chunk
+        if chunk_alignments:
+            top_aligned_chunk = chunk_alignments[0]
+            context_alignment = top_aligned_chunk["alignment"]
     
     return {
         "query_alignment": query_alignment,
-        "context_alignment": context_alignment
+        "context_alignment": context_alignment,
+        "top_aligned_chunk": top_aligned_chunk,
+        "chunk_alignments": chunk_alignments[:3]  # Return top 3 aligned chunks
     }
 
 
