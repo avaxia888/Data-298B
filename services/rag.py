@@ -195,6 +195,9 @@ class RagService:
             )
 
             # Choose appropriate mode for the fallback endpoint
+            # Any endpoint that defines a base_url should use the OpenAI-compatible flow
+            # (router.huggingface.co implements the OpenAI Chat Completions API). When
+            # base_url is absent we assume the old-style HF inference endpoint.
             _mode = "openai" if endpoint.base_url else "huggingface"
             tmp_endpoint: _EP = _dc_replace(endpoint, mode=_mode)
             llm_client = LLMClient()
