@@ -1,0 +1,32 @@
+# Evaluation Dependencies
+# Install with: pip install -r requirements-evaluation.txt
+# These are additional packages needed for running evaluations
+# Base requirements should be installed first: pip install -r requirements.txt
+
+# Core evaluation dependencies
+scikit-learn>=1.3.0  # For cosine similarity and metrics
+matplotlib>=3.7.0    # For visualization scripts
+seaborn>=0.12.0      # For advanced plotting
+
+# LLM Council evaluation dependencies (llm_council_evaluation.py)
+anthropic>=0.75.0    # For Claude judge in council
+google-generativeai>=0.8.5  # For Gemini judge in council
+mistralai>=1.9.0     # For Mistral judge in council
+# together>=1.5.0    # No longer needed - replaced with DeepSeek and Mistral
+asyncio-throttle>=1.0.2  # For rate limiting async council calls
+
+# Additional evaluation utilities
+pandas>=2.0.0        # For data analysis and reporting
+tabulate>=0.9.0      # For formatted table output
+colorama>=0.4.6      # For colored terminal output
+pytest>=7.4.0        # For running test suites
+pytest-asyncio>=0.21.0  # For async test support
+
+# Notebook support for evaluation analysis
+jupyter>=1.0.0       # For running evaluation notebooks
+ipykernel>=6.25.0    # For Jupyter kernel support
+nbformat>=5.9.0      # For notebook format handling
+
+# Optional: Performance monitoring
+memory-profiler>=0.61.0  # For memory usage tracking
+line-profiler>=4.0.0     # For line-by-line profiling
