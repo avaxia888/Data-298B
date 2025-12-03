@@ -98,7 +98,7 @@ def create_judge_scores_heatmap(results):
                     judge_data[model_name] = {
                         'GPT-4o': [],
                         'Claude-Sonnet-4.5': [],
-                        'Gemini-2.5-Pro': [],
+                        'Gemini-2.0-Flash': [],
                         'DeepSeek-V3': []
                     }
                 
@@ -111,7 +111,7 @@ def create_judge_scores_heatmap(results):
     heatmap_data = []
     for model in sorted(models_seen):
         row_data = []
-        for judge in ['GPT-4o', 'Claude-Sonnet-4.5', 'Gemini-2.5-Pro', 'DeepSeek-V3']:
+        for judge in ['GPT-4o', 'Claude-Sonnet-4.5', 'Gemini-2.0-Flash', 'DeepSeek-V3']:
             if model in judge_data and judge_data[model][judge]:
                 avg_score = np.mean(judge_data[model][judge])
                 row_data.append(avg_score)
@@ -121,7 +121,7 @@ def create_judge_scores_heatmap(results):
     
     # Create DataFrame
     df = pd.DataFrame(heatmap_data, 
-                      columns=['GPT-4o', 'Claude-4.5', 'Gemini-2.5', 'DeepSeek-V3'],
+                      columns=['GPT-4o', 'Claude-4.5', 'Gemini-2.0', 'DeepSeek-V3'],
                       index=sorted(models_seen))
     
     # Create heatmap
@@ -146,7 +146,7 @@ def create_judge_consistency_analysis(results):
     judge_variances = {
         'GPT-4o': [],
         'Claude-Sonnet-4.5': [],
-        'Gemini-2.5-Pro': [],
+        'Gemini-2.0-Flash': [],
         'DeepSeek-V3': []
     }
     
@@ -304,7 +304,7 @@ def create_detailed_summary_table(results):
     judge_stats = {
         'GPT-4o': [],
         'Claude-Sonnet-4.5': [],
-        'Gemini-2.5-Pro': [],
+        'Gemini-2.0-Flash': [],
         'DeepSeek-V3': []
     }
     
