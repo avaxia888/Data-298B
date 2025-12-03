@@ -130,11 +130,11 @@ class ClaudeJudge(CouncilJudge):
         return await loop.run_in_executor(executor, self._evaluate_sync, prompt)
 
 class GeminiJudge(CouncilJudge):
-    """Gemini 2.5 Pro judge - Context & Knowledge Specialist"""
+    """Gemini 2.0 Flash judge - Context & Knowledge Specialist"""
     def __init__(self):
-        super().__init__("Gemini-2.5-Pro")
+        super().__init__("Gemini-2.0-Flash")
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        self.model = genai.GenerativeModel('gemini-2.5-pro')
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
     
     def _evaluate_sync(self, prompt: str) -> Dict[str, Any]:
         """Synchronous evaluation for use with executor"""
@@ -185,69 +185,15 @@ class DeepSeekJudge(CouncilJudge):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(executor, self._evaluate_sync, prompt)
 
-class MistralJudge(CouncilJudge):
-    """Mistral Large 2 judge - State-of-the-art open model"""
-    def __init__(self):
-        super().__init__("Mistral-Large-2")
-        from mistralai import Mistral
-        self.client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
-        self.last_call_time = 0
-        self.min_interval = 2.0  # Minimum 2 seconds between calls
-        self.retry_delay = 5.0  # Wait 5 seconds after rate limit error
-    
-    def _evaluate_sync(self, prompt: str) -> Dict[str, Any]:
-        """Synchronous evaluation for use with executor with rate limiting"""
-        import time as time_module
-        
-        # Enforce minimum interval between calls
-        current_time = time_module.time()
-        time_since_last = current_time - self.last_call_time
-        if time_since_last < self.min_interval:
-            time_module.sleep(self.min_interval - time_since_last)
-        
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                self.last_call_time = time_module.time()
-                response = self.client.chat.complete(
-                    model="mistral-large-latest",
-                    messages=[
-                        {"role": "system", "content": "You are an expert judge. Return JSON only."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=200
-                )
-                text = response.choices[0].message.content
-                return clean_json_response(text)
-            except Exception as e:
-                error_str = str(e)
-                if "429" in error_str or "rate" in error_str.lower():
-                    logger.warning(f"Mistral rate limited, waiting {self.retry_delay}s before retry {attempt+1}/{max_retries}")
-                    time_module.sleep(self.retry_delay)
-                    self.retry_delay *= 1.5  # Exponential backoff
-                    continue
-                else:
-                    logger.error(f"Mistral judge error: {e}")
-                    return {"score": 5, "reasoning": f"Error: {str(e)}"}
-        
-        # If all retries failed
-        return {"score": 5, "reasoning": "Rate limited after retries"}
-    
-    async def evaluate(self, prompt: str) -> Dict[str, Any]:
-        """Async wrapper for evaluation"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(executor, self._evaluate_sync, prompt)
 
 class LLMCouncil:
-    """The council of 4 diverse judges (Mistral removed due to rate limiting)"""
+    """The council of 4 diverse judges evaluating Tyson-style responses"""
     def __init__(self):
         self.judges = [
             GPT4Judge(),
             ClaudeJudge(),
             GeminiJudge(),
             DeepSeekJudge()
-            # MistralJudge() removed due to severe rate limiting issues
         ]
         
         # Load Tyson reference examples from ground_truth_evaluation.json
@@ -330,29 +276,30 @@ class ModelEvaluator:
         self.rag_service = RagService()
         self.system_prompt = DEFAULT_SYSTEM_PROMPT.rstrip()
         
-        # Define the 12 models in 3 groups based on actual models in models.json
-        # TEMPORARY: Only testing RAG models as finetuned endpoints are unavailable
+        # Load pre-generated evaluation results
+        self.pregenerated_answers = self.load_pregenerated_answers()
+        
+        # Define the model groups based on available pre-generated results
+        # Mapping to match the keys in evaluation_results.json
         self.model_groups = {
-            # Commented out temporarily - endpoints unavailable
-            # "group_A_finetuned_only": [
-            #     {"key": "tyson-ft-gpt-4o-mini", "name": "GPT-4o-mini Fine-tuned", "type": "finetuned"},
-            #     {"key": "llama3-ft-neil", "name": "Llama-3 8B Fine-tuned", "type": "finetuned"},
-            #     {"key": "qwen-2.5-7b-merged-neil", "name": "Qwen-2.5 7B Fine-tuned", "type": "finetuned"},
-            #     {"key": "gemma-3-ndtv3", "name": "Gemma-2 9B Fine-tuned", "type": "finetuned"}
-            # ],
-            "group_B_base_rag": [
-                {"key": "rag-gpt-4o-mini", "name": "GPT-4o-mini + RAG", "type": "base_rag"},
-                {"key": "rag-llama3-router", "name": "Llama-3 8B + RAG", "type": "base_rag"},
-                {"key": "rag-qwen25-router", "name": "Qwen-2.5 7B + RAG", "type": "base_rag"},
-                {"key": "rag-claude-3.5-haiku", "name": "Claude 3.5 Haiku + RAG", "type": "base_rag"}
+            "group_A_finetuned_only": [
+                {"key": "tyson-ft-gpt-4o-mini_finetuned", "name": "GPT-4o-mini Fine-tuned", "type": "finetuned"},
+                {"key": "llama3-ft-neil_finetuned", "name": "Llama-3 8B Fine-tuned", "type": "finetuned"},
+                {"key": "qwen-2.5-7b-merged-neil_finetuned", "name": "Qwen-2.5 7B Fine-tuned", "type": "finetuned"},
+                {"key": "gemma-3-ndtv3_finetuned", "name": "Gemma-2 9B Fine-tuned", "type": "finetuned"}
             ],
-            # Commented out temporarily - finetuned endpoints unavailable
-            # "group_C_finetuned_rag": [
-            #     {"key": "tyson-ft-gpt-4o-mini", "name": "GPT-4o-mini FT + RAG", "type": "finetuned_rag"},
-            #     {"key": "llama3-ft-neil", "name": "Llama-3 8B FT + RAG", "type": "finetuned_rag"},
-            #     {"key": "qwen-2.5-7b-merged-neil", "name": "Qwen-2.5 7B FT + RAG", "type": "finetuned_rag"},
-            #     {"key": "gemma-3-ndtv3", "name": "Gemma-2 9B FT + RAG", "type": "finetuned_rag"}
-            # ]
+            "group_B_base_rag": [
+                {"key": "rag-gpt-4o-mini_base_rag", "name": "GPT-4o-mini + RAG", "type": "base_rag"},
+                {"key": "rag-llama3-router_base_rag", "name": "Llama-3 8B + RAG", "type": "base_rag"},
+                {"key": "rag-qwen25-router_base_rag", "name": "Qwen-2.5 7B + RAG", "type": "base_rag"},
+                {"key": "rag-claude-3.5-haiku_base_rag", "name": "Claude 3.5 Haiku + RAG", "type": "base_rag"}
+            ],
+            "group_C_finetuned_rag": [
+                {"key": "tyson-ft-gpt-4o-mini_finetuned_rag", "name": "GPT-4o-mini FT + RAG", "type": "finetuned_rag"},
+                {"key": "llama3-ft-neil_finetuned_rag", "name": "Llama-3 8B FT + RAG", "type": "finetuned_rag"},
+                {"key": "qwen-2.5-7b-merged-neil_finetuned_rag", "name": "Qwen-2.5 7B FT + RAG", "type": "finetuned_rag"},
+                {"key": "gemma-3-ndtv3_finetuned_rag", "name": "Gemma-2 9B FT + RAG", "type": "finetuned_rag"}
+            ]
         }
         
         # Load actual model configurations
@@ -362,8 +309,47 @@ class ModelEvaluator:
         with open("ground_truth_evaluation.json", "r") as f:
             self.ground_truth = json.load(f)
     
+    def load_pregenerated_answers(self) -> Dict[str, Dict[str, str]]:
+        """Load pre-generated answers from evaluation results"""
+        try:
+            with open("results/evaluation_results.json", "r") as f:
+                eval_results = json.load(f)
+            
+            # Create a lookup dictionary: {model_key: {question: answer}}
+            answers = {}
+            for model_key, model_data in eval_results["models"].items():
+                answers[model_key] = {}
+                for response in model_data["responses"]:
+                    question = response["question"]
+                    answer = response["generated_answer"]
+                    answers[model_key][question] = answer
+            
+            logger.info(f"Loaded pre-generated answers for {len(answers)} models")
+            return answers
+        except Exception as e:
+            logger.error(f"Failed to load pre-generated answers: {e}")
+            return {}
+    
+    def get_pregenerated_answer(self, model_key: str, question: str) -> Tuple[str, bool]:
+        """
+        Get pre-generated answer for a model and question
+        
+        Returns:
+            Tuple of (answer, success_flag)
+        """
+        try:
+            if model_key in self.pregenerated_answers:
+                if question in self.pregenerated_answers[model_key]:
+                    return self.pregenerated_answers[model_key][question], True
+            logger.warning(f"No pre-generated answer found for {model_key} on question: {question[:50]}")
+            return f"No pre-generated answer available", False
+        except Exception as e:
+            logger.error(f"Error retrieving pre-generated answer: {e}")
+            return f"Error retrieving answer: {str(e)}", False
+    
     def generate_answer(self, model_config: Dict, question: str, retry_count: int = 2) -> Tuple[str, bool]:
         """
+        [DEPRECATED - Using pre-generated answers instead]
         Generate answer from a model based on its configuration
         
         Returns:
@@ -500,8 +486,8 @@ class ModelEvaluator:
                     
                     logger.info(f"  Testing {model_name}...")
                     
-                    # Generate answer with error handling
-                    answer, success = self.generate_answer(model_config, question)
+                    # Get pre-generated answer instead of generating new one
+                    answer, success = self.get_pregenerated_answer(model_config['key'], question)
                     
                     if not success:
                         # Track failed model
@@ -571,9 +557,12 @@ class ModelEvaluator:
     
     def save_results(self, results: Dict, filename: str = "council_evaluation_results.json"):
         """Save results to JSON file"""
-        with open(filename, "w") as f:
+        # Ensure results directory exists
+        os.makedirs("results", exist_ok=True)
+        filepath = os.path.join("results", filename)
+        with open(filepath, "w") as f:
             json.dump(results, f, indent=2)
-        logger.info(f"Results saved to {filename}")
+        logger.info(f"Results saved to {filepath}")
     
     def print_summary(self, results: Dict):
         """Print a summary of results"""

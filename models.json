@@ -3,7 +3,7 @@
     "key": "tyson-ft-gpt-4o-mini",
     "name": "GPT-4o-mini",
     "mode": "openai",
-    "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe",
+    "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe", 
     "base_url": "https://api.openai.com/v1/chat/completions"
   },
   {
@@ -23,7 +23,7 @@
   {
   "key": "qwen-2.5-7b-merged-neil",
   "name": "Qwen 2.5 7B FT",
-  "url": "https://wc2shmqrx8o6bq3q.us-east-1.aws.endpoints.huggingface.cloud",
+  "url": "https://vxatp7b9avmnteir.us-east-1.aws.endpoints.huggingface.cloud",
   "mode": "huggingface",
   "model": "tdvoroch/qwen25-ndt-ft_merged"
   },

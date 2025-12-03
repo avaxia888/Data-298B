@@ -124,10 +124,18 @@ python llm_council_evaluation.py
 ```
 
 **Features:**
-- 4 diverse judges: GPT-4o, Claude-Sonnet-4.5, Gemini-2.5-Pro, DeepSeek-V3
-- Parallel execution (~16 minutes for full evaluation)
+- 4 diverse judges: GPT-4o, Claude-3.5-Sonnet, Gemini-2.0-Flash, DeepSeek-V3
+- Optimized to use pre-generated answers from `results/evaluation_results.json`
+- Fast parallel execution (~20-25 minutes for full evaluation)
 - Focus on Tyson style scoring (0-10 scale)
 - Comprehensive visualizations
+
+**Note:** The council evaluation now loads pre-generated model answers from `model_evaluation.py` results, eliminating redundant answer generation and significantly reducing evaluation time.
+
+**Gemini Model Selection:**
+- Use `gemini-2.0-flash` for best performance (2K RPM, unlimited daily)
+- Avoid experimental models with low rate limits (10 RPM)
+- Requires paid tier for reliable operation
 
 **Visualize Results:**
 ```bash

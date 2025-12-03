@@ -4,6 +4,7 @@ Creates visualizations for Tyson Style scores (accuracy evaluation removed)
 """
 
 import json
+import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -14,10 +15,18 @@ from pathlib import Path
 sns.set_style("whitegrid")
 plt.rcParams['figure.figsize'] = (15, 10)
 
-def load_results(filepath="council_evaluation_results.json"):
+def load_results(filepath="results/council_evaluation_results.json"):
     """Load evaluation results from JSON"""
-    with open(filepath, 'r') as f:
-        return json.load(f)
+    # Check if file exists in results folder first, otherwise try root
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    # Fallback to root directory for backward compatibility
+    elif os.path.exists("council_evaluation_results.json"):
+        with open("council_evaluation_results.json", 'r') as f:
+            return json.load(f)
+    else:
+        raise FileNotFoundError(f"Results file not found in results/ or current directory")
 
 def create_model_comparison_chart(results):
     """Create bar chart comparing all models' Tyson style scores"""
@@ -67,8 +76,9 @@ def create_model_comparison_chart(results):
     
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig('model_comparison_tyson_style.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: model_comparison_tyson_style.png")
+    os.makedirs('results', exist_ok=True)
+    plt.savefig('results/model_comparison_tyson_style.png', dpi=300, bbox_inches='tight')
+    print("✓ Saved: results/model_comparison_tyson_style.png")
     
     return avg_scores
 
@@ -88,7 +98,7 @@ def create_judge_scores_heatmap(results):
                     judge_data[model_name] = {
                         'GPT-4o': [],
                         'Claude-Sonnet-4.5': [],
-                        'Gemini-2.5-Pro': [],
+                        'Gemini-2.0-Flash': [],
                         'DeepSeek-V3': []
                     }
                 
@@ -101,7 +111,7 @@ def create_judge_scores_heatmap(results):
     heatmap_data = []
     for model in sorted(models_seen):
         row_data = []
-        for judge in ['GPT-4o', 'Claude-Sonnet-4.5', 'Gemini-2.5-Pro', 'DeepSeek-V3']:
+        for judge in ['GPT-4o', 'Claude-Sonnet-4.5', 'Gemini-2.0-Flash', 'DeepSeek-V3']:
             if model in judge_data and judge_data[model][judge]:
                 avg_score = np.mean(judge_data[model][judge])
                 row_data.append(avg_score)
@@ -111,7 +121,7 @@ def create_judge_scores_heatmap(results):
     
     # Create DataFrame
     df = pd.DataFrame(heatmap_data, 
-                      columns=['GPT-4o', 'Claude-4.5', 'Gemini-2.5', 'DeepSeek-V3'],
+                      columns=['GPT-4o', 'Claude-4.5', 'Gemini-2.0', 'DeepSeek-V3'],
                       index=sorted(models_seen))
     
     # Create heatmap
@@ -126,8 +136,8 @@ def create_judge_scores_heatmap(results):
     ax.set_ylabel('Model', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig('judge_scores_heatmap.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: judge_scores_heatmap.png")
+    plt.savefig('results/judge_scores_heatmap.png', dpi=300, bbox_inches='tight')
+    print("✓ Saved: results/judge_scores_heatmap.png")
     
     return df
 
@@ -136,7 +146,7 @@ def create_judge_consistency_analysis(results):
     judge_variances = {
         'GPT-4o': [],
         'Claude-Sonnet-4.5': [],
-        'Gemini-2.5-Pro': [],
+        'Gemini-2.0-Flash': [],
         'DeepSeek-V3': []
     }
     
@@ -199,8 +209,8 @@ def create_judge_consistency_analysis(results):
     
     plt.suptitle('Judge Agreement Analysis', fontsize=16, fontweight='bold')
     plt.tight_layout()
-    plt.savefig('judge_consistency.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: judge_consistency.png")
+    plt.savefig('results/judge_consistency.png', dpi=300, bbox_inches='tight')
+    print("✓ Saved: results/judge_consistency.png")
     
     return judge_variances
 
@@ -247,8 +257,8 @@ def create_group_performance_radar(results):
     ax.legend(loc='upper right')
     
     plt.tight_layout()
-    plt.savefig('group_performance.png', dpi=300, bbox_inches='tight')
-    print("✓ Saved: group_performance.png")
+    plt.savefig('results/group_performance.png', dpi=300, bbox_inches='tight')
+    print("✓ Saved: results/group_performance.png")
     
     return dict(zip(groups, scores))
 
@@ -294,7 +304,7 @@ def create_detailed_summary_table(results):
     judge_stats = {
         'GPT-4o': [],
         'Claude-Sonnet-4.5': [],
-        'Gemini-2.5-Pro': [],
+        'Gemini-2.0-Flash': [],
         'DeepSeek-V3': []
     }
     
@@ -356,12 +366,12 @@ def main():
     print("VISUALIZATION COMPLETE")
     print("="*80)
     
-    print("\nGenerated files:")
-    print("  ✓ model_comparison_tyson_style.png - Bar chart of all models")
-    print("  ✓ judge_scores_heatmap.png - Heatmap of judge scoring patterns")
-    print("  ✓ judge_consistency.png - Judge agreement analysis")
+    print("\nGenerated files in results/ folder:")
+    print("  ✓ results/model_comparison_tyson_style.png - Bar chart of all models")
+    print("  ✓ results/judge_scores_heatmap.png - Heatmap of judge scoring patterns")
+    print("  ✓ results/judge_consistency.png - Judge agreement analysis")
     if group_scores:
-        print("  ✓ group_performance.png - Group comparison chart")
+        print("  ✓ results/group_performance.png - Group comparison chart")
     
     print("\nKey Findings:")
     if avg_scores:
