@@ -23,7 +23,7 @@
   {
   "key": "qwen-2.5-7b-merged-neil",
   "name": "Qwen 2.5 7B FT",
-  "url": "https://vxatp7b9avmnteir.us-east-1.aws.endpoints.huggingface.cloud",
+  "url": "https://wc2shmqrx8o6bq3q.us-east-1.aws.endpoints.huggingface.cloud",
   "mode": "huggingface",
   "model": "tdvoroch/qwen25-ndt-ft_merged"
   },

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import httpx
-from utils import llama3_chat_template, extract_hf_text, sanitize_output
+from utils import llama3_chat_template, extract_hf_text, sanitize_output, truncate_to_complete_sentence
 
 
 @dataclass
@@ -79,18 +79,22 @@ class LLMClient:
 
         temp_msgs = messages or ([{"role": "user", "content": prompt}] if prompt else None)
         inputs = llama3_chat_template(system_prompt, temp_msgs) or prompt or system_prompt or ""
-        params = {"return_full_text": False}
+        params = {"return_full_text": False, "repetition_penalty": 1.15}
         if parameters:
             if "temperature" in parameters:
                 params["temperature"] = parameters["temperature"]
             if "max_new_tokens" in parameters:
                 params["max_new_tokens"] = parameters["max_new_tokens"]
+            if "top_p" in parameters:
+                params["top_p"] = parameters["top_p"]
+            if "repetition_penalty" in parameters:
+                params["repetition_penalty"] = parameters["repetition_penalty"]
 
         payload = {"inputs": inputs, "parameters": params}
         with httpx.Client(timeout=120.0) as client:
             resp = client.post(endpoint.url, headers=dict(self.hf_base_headers), json=payload)
             resp.raise_for_status()
-            return sanitize_output(extract_hf_text(resp.json()))
+            return truncate_to_complete_sentence(sanitize_output(extract_hf_text(resp.json())))
 
     def _generate_openai(
         self,
@@ -117,7 +121,7 @@ class LLMClient:
             chat_messages.append({"role": "system", "content": system_prompt})
         chat_messages.extend(messages or [{"role": "user", "content": prompt}])
 
-        payload = {"model": model_id, "messages": chat_messages}
+        payload = {"model": model_id, "messages": chat_messages, "frequency_penalty": 0.5}
 
         if parameters:
             if "temperature" in parameters:
@@ -153,5 +157,5 @@ class LLMClient:
             data = resp.json()
             if isinstance(data, dict) and (choices := data.get("choices")):
                 if content := choices[0].get("message", {}).get("content"):
-                    return sanitize_output(content)
-            return sanitize_output(json.dumps(data))
+                    return truncate_to_complete_sentence(sanitize_output(content))
+            return truncate_to_complete_sentence(sanitize_output(json.dumps(data)))
