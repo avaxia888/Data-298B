@@ -39,7 +39,10 @@ class RagService:
         if self._pinecone_index is None:
             api_key = get_env(["PINECONE_API_KEY"], required=True)
             index_name = get_env(["PINECONE_INDEX"], default="tyson-embeddings-openai-1536")
-            self._pinecone_index = PC(api_key=api_key).Index(index_name)
+            host = os.getenv("PINECONE_HOST")
+            pc = PC(api_key=api_key)
+            # If a specific index host is provided, prefer it (avoids env/project mismatches)
+            self._pinecone_index = pc.Index(index_name) if not host else pc.Index(host=host)
 
         if self._bedrock is None:
             region = get_env(["AWS_REGION", "AWS_DEFAULT_REGION"], default="us-east-1")
@@ -158,7 +161,7 @@ class RagService:
         query: str,
         history: List[Dict[str, str]],
         temperature: float,
-        endpoint: EndpointConfig,
+        endpoint: _EP,
         system_prompt: Optional[str] = None,
     ) -> Tuple[str, Dict[str, Any]]:
 

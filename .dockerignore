@@ -4,6 +4,7 @@ __pycache__/
 .env
 .env.example
 .gitignore
+.env*
 
 ground_truth_evaluation.json
 data.json
