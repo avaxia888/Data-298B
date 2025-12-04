@@ -1,7 +1,7 @@
 [
   {
     "key": "tyson-ft-gpt-4o-mini",
-    "name": "GPT 4o Mini FT",
+    "name": "GPT 4o Mini Finetuned",
     "mode": "openai",
     "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe", 
     "base_url": "https://api.openai.com/v1/chat/completions"
