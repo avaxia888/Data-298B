@@ -4,14 +4,10 @@ __pycache__/
 .env
 .env.example
 .gitignore
-.env*
 
 ground_truth_evaluation.json
 data.json
-model_evaluation.py
-llm_council_evaluation.py
 visualize_council_results.py
-fix_gemma_evaluation.py
 README.md
 
 FT_Notebooks/
