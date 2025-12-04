@@ -14,7 +14,7 @@
   },
   {
     "key": "rag-gpt-4o-mini",
-    "name": "GPT 4o Mini FT",
+    "name": "GPT 4o Mini",
     "url": "https://api.openai.com/v1/chat/completions",
     "mode": "rag",
     "model": "gpt-4o-mini",
@@ -52,7 +52,7 @@
   },
   {
   "key": "rag-gemma3-router",
-  "name": "Gemma 3 FT",
+  "name": "Gemma 3",
   "url": "https://router.huggingface.co",
   "mode": "rag",
   "model": "google/gemma-3-12b-it:featherless-ai",
