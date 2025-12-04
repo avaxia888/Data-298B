@@ -67,6 +67,15 @@ class RagService:
         )
         return json.loads(res["body"].read())
 
+    def _build_bedrock_payload(self, model_id: str, prompt: str, temperature: float = 0.0, max_tokens: int = 256) -> Dict[str, Any]:
+        # Claude 3 (Haiku/Sonnet/Opus) uses Messages API
+        return {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        }
+
     # Internal Enhancements
 
     def _rewrite_query(self, model_id: str, query: str) -> str:
@@ -76,7 +85,7 @@ class RagService:
             "Keep it concise (1 sentence) and add key technical terms, synonyms, and specific nouns.\n\n"
             f"User query: {query}\n\nRewritten:"
         )
-        payload = {"input": rewrite_prompt, "temperature": 0.0, "max_tokens": 64}
+        payload = self._build_bedrock_payload(model_id, rewrite_prompt, temperature=0.0, max_tokens=64)
         body = self._invoke_bedrock(model_id, payload)
         text = extract_bedrock_text(body)
         return (text or query).strip()
@@ -94,7 +103,7 @@ class RagService:
                 f"Query: {query}\n\n{items_text}\n\nReturn JSON array:"
             )
 
-            payload = {"input": scoring_prompt, "temperature": 0.0, "max_tokens": 128}
+            payload = self._build_bedrock_payload(model_id, scoring_prompt, temperature=0.0, max_tokens=128)
             body = self._invoke_bedrock(model_id, payload)
             scored_text = extract_bedrock_text(body)
 
@@ -125,34 +134,11 @@ class RagService:
             "key facts and numbers. Do NOT add new information.\n\n"
             f"Text:\n{chunk}\n\nSummary:"
         )
-        payload = {"input": summary_prompt, "temperature": 0.0, "max_tokens": 120}
+        payload = self._build_bedrock_payload(model_id, summary_prompt, temperature=0.0, max_tokens=120)
         body = self._invoke_bedrock(model_id, payload)
         return (extract_bedrock_text(body) or "").strip()
 
-    def _validate_grounding(self, model_id: str, answer: str, contexts: List[str]) -> Optional[str]:
-        # Validate that the generated answer is grounded in retrieved context
-        combined = "\n\n".join(contexts[:6])
-        validation_prompt = (
-            "You will be given an Answer and the Retrieved Contexts. "
-            "If the Answer is fully supported by the contexts, return the single line: SUPPORTED. "
-            "If the Answer contains claims not supported by the contexts, return a brief grounded rewrite "
-            "that strictly uses only information from the contexts. "
-            "If contexts are insufficient, respond with: NOT_ENOUGH_CONTEXT.\n\n"
-            f"Contexts:\n{combined}\n\nAnswer:\n{answer}\n\nRespond:"
-        )
 
-        payload = {"input": validation_prompt, "temperature": 0.0, "max_tokens": 180}
-        body = self._invoke_bedrock(model_id, payload)
-        resp = (extract_bedrock_text(body) or "").strip()
-
-        if not resp:
-            return None
-        if resp.upper().startswith("SUPPORTED"):
-            return None
-        if resp.upper().startswith("NOT_ENOUGH_CONTEXT"):
-            return "NOT_ENOUGH_CONTEXT"
-
-        return resp  # grounded rewrite
 
     # Main public RAG entry point
     def answer(
@@ -221,17 +207,6 @@ class RagService:
         top_k = 12
         raw_matches = retrieve_context(self._pinecone_index, qv, top_k=top_k)
 
-        if not raw_matches:
-            # No context found — fallback to standard generation
-            prompt = build_rag_prompt(query, [], history, system_prompt or DEFAULT_SYSTEM_PROMPT, include_system=False)
-            payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
-            body = self._invoke_bedrock(model_id, payload)
-            raw_text = extract_bedrock_text(body)
-            text = sanitize_output(raw_text)
-            # No context, return empty metrics
-            metrics = {"query_alignment": 0.0, "context_alignment": 0.0}
-            return text, metrics
-
         # Rerank passages using Bedrock scoring
         try:
             scores = self._score_candidates_with_bedrock(bedrock_for_aux, rewritten_query, raw_matches)
@@ -251,52 +226,27 @@ class RagService:
             except Exception:
                 compressed.append(p)
 
-        # Build full RAG prompt (includes system persona)
+        # Generate answer using chosen model
+        # For Anthropic, system prompt goes in 'system' field, not in messages
         prompt = build_rag_prompt(
             query,
             compressed,
             history,
             system_prompt or DEFAULT_SYSTEM_PROMPT,
-            include_system=True,
+            include_system=False,
         )
+        payload = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 800,
+            "temperature": temperature,
+            "top_p": 0.9,
+            "system": system_prompt or DEFAULT_SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        }
 
-        # Generate answer using chosen model
-        lower = model_id.lower() if model_id else ""
-        if "anthropic" in lower:
-            payload = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 800,
-                "temperature": temperature,
-                "top_p": 0.9,
-                "system": system_prompt or DEFAULT_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
-            }
-        # Removed Mistral-specific payload logic
-        else:
-            payload = {"input": prompt, "temperature": temperature, "max_tokens": 800}
-
-        res = self._bedrock.invoke_model(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(payload),
-        )
-        body = json.loads(res["body"].read())
+        body = self._invoke_bedrock(model_id, payload)
         raw_text = extract_bedrock_text(body)
         text = sanitize_output(raw_text)
-
-        # Validate grounding to prevent hallucination
-        try:
-            grounding = self._validate_grounding(bedrock_for_aux, text, top_passages)
-            if grounding == "NOT_ENOUGH_CONTEXT":
-                text = (
-                    "I don't have enough reliable context in the knowledge base to fully support that claim. "
-                    "Try rephrasing or ask a related question."
-                )
-            elif grounding:
-                text = grounding
-        except Exception:
-            pass
 
         # Compute context alignment metrics
         metrics = evaluate_answer_alignment(self._openai_client, query, text, top_passages)
