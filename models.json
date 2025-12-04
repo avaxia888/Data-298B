@@ -1,7 +1,7 @@
 [
   {
     "key": "tyson-ft-gpt-4o-mini",
-    "name": "GPT-4o-mini",
+    "name": "GPT 4o Mini FT",
     "mode": "openai",
     "model": "ft:gpt-4o-mini-2024-07-18:sjsu:tyson-finetuned-gpt-4o-mini:CVTndkSe", 
     "base_url": "https://api.openai.com/v1/chat/completions"
@@ -14,7 +14,7 @@
   },
   {
     "key": "rag-gpt-4o-mini",
-    "name": "GPT-4o-mini",
+    "name": "GPT 4o Mini FT",
     "url": "https://api.openai.com/v1/chat/completions",
     "mode": "rag",
     "model": "gpt-4o-mini",
@@ -22,22 +22,22 @@
   },
   {
   "key": "qwen-2.5-7b-merged-neil",
-  "name": "Qwen 2.5 7B FT",
+  "name": "Qwen 2.5 FT",
   "url": "https://vxatp7b9avmnteir.us-east-1.aws.endpoints.huggingface.cloud",
   "mode": "huggingface",
   "model": "tdvoroch/qwen25-ndt-ft_merged"
   },
   {
   "key": "gemma-3-ndtv3",
-  "name": "Gemma 3",
-  "url": "https://wvfwpzrfkat3683k.us-east-1.aws.endpoints.huggingface.cloud",
+  "name": "Gemma 3 FT",
+  "url": "https://yoltt08l2v3cz7tu.us-east-1.aws.endpoints.huggingface.cloud",
   "mode": "openai",
   "model": "tdvoroch/gemma3-ndtv3",
-  "base_url": "https://wvfwpzrfkat3683k.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
+  "base_url": "https://yoltt08l2v3cz7tu.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
   },
   {
     "key": "rag-qwen25-router",
-    "name": "Qwen 2.5 7B",
+    "name": "Qwen 2.5",
     "url": "https://router.huggingface.co",
     "mode": "rag",
     "model": "Qwen/Qwen2.5-7B-Instruct",
@@ -45,14 +45,14 @@
   },
   {
     "key": "llama3-ft-neil",
-    "name": "Llama 3 Finetuned",
-    "url": "https://rkdxuyobs87zy40q.us-east-1.aws.endpoints.huggingface.cloud",
+    "name": "Llama 3 FT",
+    "url": "https://x6gp7msneu49e8i2.us-east-1.aws.endpoints.huggingface.cloud",
     "mode": "huggingface",
     "model": "neil-tyson-llama-3-8b-instru-yir"
   },
   {
   "key": "rag-gemma3-router",
-  "name": "Gemma 3 12B",
+  "name": "Gemma 3 FT",
   "url": "https://router.huggingface.co",
   "mode": "rag",
   "model": "google/gemma-3-12b-it:featherless-ai",
@@ -60,7 +60,7 @@
   },
   {
     "key": "rag-llama3-router",
-    "name": "Llama 3 8B",
+    "name": "Llama 3",
     "url": "https://router.huggingface.co",
     "mode": "rag",
     "model": "meta-llama/Meta-Llama-3-8B-Instruct:novita",
