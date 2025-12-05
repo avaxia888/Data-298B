@@ -122,7 +122,7 @@ def main():
             # Retrieval augmented generation using finetuned LLMs
             # Retrieval pipeline setup
             rag_service._ensure()
-            embed_model = rag_service._embed_model
+            embed_model = rag_service._openai_client
             pc_index = rag_service._pinecone_index
             history_key = f"ragfinetuned_conv_{selected.key}"
             history = st.session_state.get(history_key, [])
