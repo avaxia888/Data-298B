@@ -15,15 +15,22 @@ This project implements a multi-faceted approach to creating an AI that can resp
 ```
 Data-298B/
 ├── app.py                          # Main Gradio web application
-├── llm_client.py                   # LLM client for model interactions
+├── services/
+│   ├── llm_client.py               # Unified LLM client for model interactions
+│   └── rag.py                      # RAG implementation with Pinecone
 ├── models.json                     # Model configurations
-├── rag.py                          # RAG implementation with Pinecone
-├── system_prompt.py                # Tyson system prompt
+├── prompt_template.py              # Tyson system prompt
+├── utils.py                        # Utility functions for embeddings & RAG
 ├── ground_truth_evaluation.json   # 16 Q&A pairs for evaluation
-├── evaluation.py                   # Basic evaluation script
-├── model_evaluation.py             # Model comparison evaluation
-├── llm_council_evaluation.py      # LLM Council evaluation (Karpathy-style)
-├── visualize_council_results.py   # Visualization for council results
+├── model_evaluation.py             # Quantitative evaluation (cosine similarity)
+├── llm_council_evaluation.py      # Qualitative evaluation (LLM judges)
+├── visualize_evaluation_scores.py  # Generate evaluation visualizations
+├── results/                        # Evaluation results and visualizations
+│   ├── evaluation_results.json     # Quantitative evaluation results
+│   ├── evaluation_scores_bar_chart.png
+│   ├── category_comparison.png
+│   └── performance_vs_efficiency.png
+├── evaluation_system_report.md     # Comprehensive evaluation documentation
 └── requirements.txt                # Project dependencies
 ```
 
@@ -33,6 +40,7 @@ Data-298B/
 - **tyson-ft-gpt-4o-mini**: Fine-tuned GPT-4o-mini on Tyson responses
 - **llama3-ft-neil**: Fine-tuned Llama 3 8B
 - **qwen-2.5-7b-merged-neil**: Fine-tuned Qwen 2.5 7B
+- **gemma-3-ndtv3**: Fine-tuned Gemma-2 9B
 
 ### Base + RAG Models (Group B)
 - **rag-claude-3.5-haiku**: Claude 3.5 Haiku with RAG
@@ -42,6 +50,7 @@ Data-298B/
 
 ### Fine-tuned + RAG Models (Group C)
 - Combination of fine-tuning and RAG for optimal performance
+- Same models as Group A but augmented with RAG context retrieval
 
 ## Setup
 
@@ -49,8 +58,11 @@ Data-298B/
 - Python 3.8+
 - OpenAI API key
 - Anthropic API key (for Claude models)
+- Google API key (for Gemini models)
+- DeepSeek API key (for DeepSeek judge)
 - Pinecone API key (for RAG)
 - HuggingFace token (for open models)
+- AWS credentials (optional, for Bedrock models)
 
 ### Installation
 
@@ -69,7 +81,6 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 3. Install dependencies:
 ```bash
 pip install -r requirements.txt
-pip install -r requirements-evaluation.txt  # For evaluation tools
 ```
 
 4. Set up environment variables:
@@ -88,35 +99,37 @@ Access at `http://localhost:7860`
 
 ### Command Line
 ```python
-from llm_client import LLMClient
-from rag import RagService
+from services.llm_client import LLMClient, load_models_config
+from services.rag import RagService
 
 # Initialize
 client = LLMClient()
 rag = RagService()
+models = load_models_config("models.json")
 
-# Get response
+# Get response with RAG
 question = "What is dark matter?"
-context = rag.get_context(question)
-response = client.get_model_response("rag-claude-3.5-haiku", question, context)
+model = next(m for m in models if m.key == "rag-claude-3.5-haiku")
+response, context = rag.answer(question, [], 0.7, model)
 print(response)
 ```
 
 ## Evaluation Systems
 
-### 1. Basic Evaluation
-Evaluates models on 16 ground truth Q&A pairs:
-```bash
-python evaluation.py
-```
-
-### 2. Model Comparison
-Compares multiple models with cosine similarity:
+### 1. Quantitative Evaluation (model_evaluation.py)
+Evaluates models using cosine similarity between embeddings:
 ```bash
 python model_evaluation.py
 ```
 
-### 3. LLM Council Evaluation (Advanced)
+**Features:**
+- Tests 12 models across 3 configurations (base+RAG, fine-tuned, fine-tuned+RAG)
+- Uses OpenAI text-embedding-3-small for embeddings
+- Measures semantic similarity (0-1 scale)
+- Response time tracking
+- Results saved to `results/evaluation_results.json`
+
+### 2. Qualitative Evaluation (llm_council_evaluation.py)
 Multi-judge evaluation system based on Karpathy's LLM Council:
 
 ```bash
@@ -124,29 +137,33 @@ python llm_council_evaluation.py
 ```
 
 **Features:**
-- 4 diverse judges: GPT-4o, Claude-3.5-Sonnet, Gemini-2.0-Flash, DeepSeek-V3
+- 4 diverse judges: GPT-4o, Claude-Sonnet-4.5, Gemini-2.0-Flash, DeepSeek-V3
 - Optimized to use pre-generated answers from `results/evaluation_results.json`
 - Fast parallel execution (~20-25 minutes for full evaluation)
 - Focus on Tyson style scoring (0-10 scale)
-- Comprehensive visualizations
+- Scoring criteria:
+  - Vocabulary (cosmic terminology): 3 points
+  - Enthusiasm and wonder: 2 points
+  - Educational storytelling: 2 points
+  - Humor and accessibility: 2 points
+  - Signature phrases: 1 point
 
-**Note:** The council evaluation now loads pre-generated model answers from `model_evaluation.py` results, eliminating redundant answer generation and significantly reducing evaluation time.
+**Performance Optimization:**
+- Pre-generated answers reduce evaluation from 3+ hours to ~22 minutes
+- Parallel judge evaluation using ThreadPoolExecutor
+- 10x performance improvement over sequential approach
 
-**Gemini Model Selection:**
-- Use `gemini-2.0-flash` for best performance (2K RPM, unlimited daily)
-- Avoid experimental models with low rate limits (10 RPM)
-- Requires paid tier for reliable operation
-
-**Visualize Results:**
+### 3. Visualizations
+Generate comprehensive evaluation charts:
 ```bash
-python visualize_council_results.py
+python visualize_evaluation_scores.py
 ```
 
 Generates:
-- Model comparison charts
-- Judge agreement heatmaps
-- Score distribution analysis
-- Group performance comparisons
+- Model performance bar charts
+- Category comparison (base+RAG vs fine-tuned vs fine-tuned+RAG)
+- Performance vs efficiency scatter plots
+- Saved to `results/` directory
 
 
 ## Configuration
@@ -164,24 +181,34 @@ Configure available models and their endpoints:
 ```
 
 ### System Prompt
-Tyson's personality is defined in `system_prompt.py`. The prompt emphasizes:
+Tyson's personality is defined in `prompt_template.py`. The prompt emphasizes:
 - Cosmic perspective and wonder
 - Accessible explanations
 - Conversational, engaging tone
 - Pop culture references
+- Educational storytelling approach
 
 ## Testing
 
 ### Quick Test
 ```python
 # Test a single model
-python -c "from llm_client import LLMClient; client = LLMClient(); print(client.get_model_response('rag-claude-3.5-haiku', 'Who are you?'))"
+from services.llm_client import LLMClient, load_models_config
+from services.rag import RagService
+
+client = LLMClient()
+rag = RagService()
+models = load_models_config("models.json")
+model = next(m for m in models if m.key == "rag-claude-3.5-haiku")
+response, _ = rag.answer("Who are you?", [], 0.7, model)
+print(response)
 ```
 
-### Evaluation Test (1 question)
-Edit `llm_council_evaluation.py` line 477:
+### Evaluation Test (Limited Questions)
+To test with fewer questions, modify the ground truth loop:
 ```python
-for qa_idx, qa_pair in enumerate(self.ground_truth[:1]):  # Test with 1 question
+# In model_evaluation.py or llm_council_evaluation.py
+for qa_pair in self.ground_truth[:1]:  # Test with 1 question
 ```
 
 ## RAG System
@@ -190,8 +217,9 @@ The RAG system uses Pinecone vector database with OpenAI embeddings:
 
 ### Features
 - **Embedding Model**: text-embedding-3-small (1536 dimensions)
-- **Vector Database**: Pinecone (tyson-knowledge index)
-- **Context Retrieval**: Top 3 most relevant chunks
+- **Vector Database**: Pinecone (tyson-embeddings-openai-1536 index)
+- **Context Retrieval**: Top 5 most relevant chunks (configurable)
+- **Query Rewriting**: Optional query optimization for better retrieval
 - **Fallback**: Returns empty context if service unavailable
 
 ### Answer Alignment Metrics
@@ -226,10 +254,20 @@ The system now includes meaningful metrics to evaluate answer quality:
 
 ### Usage
 ```python
-from rag import RagService
+from services.rag import RagService
+from services.llm_client import load_models_config
 
 rag = RagService()
-context = rag.get_context("What is dark energy?")
+models = load_models_config("models.json")
+model = next(m for m in models if m.key == "rag-claude-3.5-haiku")
+
+# Get response with context
+response, context = rag.answer(
+    query="What is dark energy?",
+    history=[],
+    temperature=0.7,
+    endpoint=model
+)
 ```
 
 ## Contributing
@@ -244,11 +282,29 @@ context = rag.get_context("What is dark energy?")
 
 This project is for educational purposes as part of Data 298B coursework.
 
+## Key Improvements & Features
+
+### Evaluation System
+- **Dual Evaluation Approach**: Quantitative (cosine similarity) and qualitative (LLM judges)
+- **Performance Optimization**: 10x speedup through parallel processing and pre-generated answers
+- **Comprehensive Metrics**: Response time, semantic similarity, and style scoring
+
+### Model Categories
+- **Group A**: Fine-tuned models capture Tyson's personality
+- **Group B**: Base models with RAG for factual accuracy
+- **Group C**: Fine-tuned + RAG combining personality and knowledge
+
+### Technical Highlights
+- **Unified LLM Client**: Single interface for multiple model providers
+- **Robust Error Handling**: Retry logic and fallback mechanisms
+- **Visualization Suite**: Automatic generation of performance charts
+- **Modular Architecture**: Clean separation of services and utilities
+
 ## Acknowledgments
 
 - Neil deGrasse Tyson for the inspiration and reference content
 - Andrej Karpathy for the LLM Council evaluation concept
-- OpenAI, Anthropic, HuggingFace for model APIs
+- OpenAI, Anthropic, Google, HuggingFace, DeepSeek for model APIs
 - Pinecone for vector database services
 
 ## Contact

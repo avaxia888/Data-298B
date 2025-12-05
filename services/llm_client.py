@@ -134,10 +134,9 @@ class LLMClient:
 
         url = base_url
 
-        if not parameters:
-            host = url
-            if endpoint.key == "gemma-3-ndtv3":
-                payload["max_tokens"] = payload.get("max_tokens", 512)
+        # Always apply Gemma-specific fix to ensure max_tokens is set
+        if endpoint.key == "gemma-3-ndtv3" and "max_tokens" not in payload:
+            payload["max_tokens"] = 512
 
         with httpx.Client(timeout=60.0) as client:
             headers: Dict[str, str] = {"Content-Type": "application/json"}

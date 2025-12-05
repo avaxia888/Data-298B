@@ -113,10 +113,20 @@ class ModelEvaluator:
                 )
             elif model_config.mode in ["openai", "huggingface", "bedrock"]:
                 # Direct model call
-                messages = [
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": question}
-                ]
+                
+                # Check if this is a Gemma model (doesn't support system messages)
+                if "gemma" in model_config.key.lower():
+                    # For Gemma, combine system prompt with user message
+                    combined_prompt = f"{self.system_prompt}\n\nUser: {question}"
+                    messages = [{"role": "user", "content": combined_prompt}]
+                    system_prompt_to_use = None
+                else:
+                    # Standard message format for other models
+                    messages = [
+                        {"role": "system", "content": self.system_prompt},
+                        {"role": "user", "content": question}
+                    ]
+                    system_prompt_to_use = self.system_prompt
                 
                 if model_config.mode == "bedrock":
                     # Special handling for Bedrock/Claude
@@ -128,7 +138,7 @@ class ModelEvaluator:
                         prompt="",
                         parameters={"temperature": 0.7, "max_new_tokens": 256},
                         messages=messages,
-                        system_prompt=self.system_prompt
+                        system_prompt=system_prompt_to_use
                     )
             else:
                 logger.error(f"Unknown model mode: {model_config.mode}")
@@ -169,11 +179,17 @@ class ModelEvaluator:
             context_block = "\n\n".join(chunks) if chunks else ""
             augmented_system_prompt = f"{self.system_prompt}\n\nRelevant context:\n{context_block}" if chunks else self.system_prompt
             
-            # Generate response with augmented context
-            messages = [
-                {"role": "system", "content": augmented_system_prompt},
-                {"role": "user", "content": question}
-            ]
+            # Check if this is a Gemma model (doesn't support system messages)
+            if "gemma" in model_config.key.lower():
+                # For Gemma, combine augmented system prompt with user message
+                combined_prompt = f"{augmented_system_prompt}\n\nUser: {question}"
+                messages = [{"role": "user", "content": combined_prompt}]
+            else:
+                # Standard message format for other models
+                messages = [
+                    {"role": "system", "content": augmented_system_prompt},
+                    {"role": "user", "content": question}
+                ]
             
             response_text = self.llm_client.generate(
                 endpoint=model_config,

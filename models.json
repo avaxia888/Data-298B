@@ -30,10 +30,10 @@
   {
   "key": "gemma-3-ndtv3",
   "name": "Gemma 3",
-  "url": "https://wvfwpzrfkat3683k.us-east-1.aws.endpoints.huggingface.cloud",
+  "url": "https://yoltt08l2v3cz7tu.us-east-1.aws.endpoints.huggingface.cloud/",
   "mode": "openai",
   "model": "tdvoroch/gemma3-ndtv3",
-  "base_url": "https://wvfwpzrfkat3683k.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
+  "base_url": "https://yoltt08l2v3cz7tu.us-east-1.aws.endpoints.huggingface.cloud/v1/chat/completions"
   },
   {
     "key": "rag-qwen25-router",
